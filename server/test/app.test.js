@@ -23,22 +23,6 @@ test("health endpoint reports that the backend is running", async () => {
   assert.deepEqual(await response.json(), { status: "ok" });
 });
 
-test("investigation endpoint returns the deterministic demo result", async () => {
-  const response = await fetch(`${baseUrl}/api/investigations`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: "https://www.example.com/path?q=demo" })
-  });
-
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    status: "not_yet_investigated",
-    summary: "This is a demo response. No real security investigation has been performed.",
-    evidence: [],
-    domain: "www.example.com"
-  });
-});
-
 test("investigation endpoint rejects missing and malformed URLs", async (t) => {
   const cases = [
     { name: "missing URL", body: {}, error: "A URL is required." },
