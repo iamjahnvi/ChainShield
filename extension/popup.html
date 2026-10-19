@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChainShield</title>
+    <link rel="stylesheet" href="popup.css">
+    <script src="popup.js" defer></script>
+  </head>
+  <body>
+    <main class="popup">
+      <header class="brand">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <div>
+          <p class="eyebrow">WEB3 SITE CHECK</p>
+          <h1>ChainShield</h1>
+        </div>
+      </header>
+
+      <p class="intro">Investigate a website with evidence, not guesswork.</p>
+
+      <button id="investigate-button" type="button">Investigate this website</button>
+      <p id="page-domain" class="page-domain" aria-live="polite"></p>
+      <p id="message" class="message" role="status" aria-live="polite">
+        This prototype returns demo data only.
+      </p>
+
+      <section id="result" class="result" aria-labelledby="result-heading" hidden>
+        <div class="result-heading-row">
+          <h2 id="result-heading">Investigation result</h2>
+          <span class="demo-badge">DEMO</span>
+        </div>
+        <p id="result-status" class="result-status"></p>
+        <p id="result-summary" class="result-summary"></p>
+        <h3>Evidence</h3>
+        <ul id="evidence-list" class="evidence-list"></ul>
+      </section>
+
+      <footer>No real security scan has been performed.</footer>
+    </main>
+  </body>
+</html>

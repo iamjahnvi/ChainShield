@@ -1,0 +1,14 @@
+{
+  "name": "chainshield-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local demo API for the ChainShield Chrome extension",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
