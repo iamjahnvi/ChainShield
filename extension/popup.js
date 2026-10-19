@@ -4,8 +4,8 @@ const VALID_STATUSES = ["research_available", "no_results"];
 const GROUP_DEFINITIONS = [
   {
     category: "domain_specific",
-    title: "Directly refers to this hostname",
-    note: "Sources that explicitly reference the hostname. Relevance to the domain does not establish malicious activity."
+    title: "Domain-specific sources",
+    note: "Sources hosted on this hostname or specifically about it. Relevance to the domain does not establish malicious activity."
   },
   {
     category: "general_information",
@@ -74,6 +74,13 @@ function buildEvidenceItem(entry) {
     snippet.className = "evidence-snippet";
     snippet.textContent = entry.snippet.trim();
     item.append(snippet);
+  }
+
+  if (typeof entry.categoryReason === "string" && entry.categoryReason.trim() !== "") {
+    const reason = document.createElement("p");
+    reason.className = "evidence-reason";
+    reason.textContent = entry.categoryReason.trim();
+    item.append(reason);
   }
 
   const metaParts = [];
@@ -147,13 +154,12 @@ function displayResult(data) {
   resultSummary.textContent = data.summary;
 
   if (domainSpecificCount === 0) {
-    domainNote.textContent = `No sources specifically mentioning ${data.domain} were found. This does not mean the website is safe.`;
+    domainNote.textContent = `No domain-specific evidence about ${data.domain} was found. This does not mean the website is safe.`;
     domainNote.dataset.tone = "empty";
   } else {
     domainNote.textContent =
       `${domainSpecificCount} source${domainSpecificCount === 1 ? "" : "s"} ` +
-      `explicitly mention${domainSpecificCount === 1 ? "s" : ""} ${data.domain}. ` +
-      "A mention is not proof of malicious activity.";
+      `related to ${data.domain}. Relevance is not proof of malicious activity.`;
     delete domainNote.dataset.tone;
   }
 

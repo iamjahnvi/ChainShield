@@ -236,6 +236,12 @@ h3 {
   color: #53635f;
 }
 
+.evidence-reason {
+  margin: 3px 0 0;
+  color: #53635f;
+  font-style: italic;
+}
+
 .evidence-meta {
   margin: 3px 0 0;
   color: #778580;
