@@ -4,13 +4,34 @@ const {
   buildInvestigationQuery,
   searchTinyFish
 } = require("../tinyfish");
+const { CATEGORIES, prepareEvidence } = require("../classification");
 
 const router = express.Router();
 
-const SEARCH_SUMMARY =
-  "Web search returned sources for review. These results do not establish whether the website is safe or malicious.";
 const NO_RESULTS_SUMMARY =
   "The web search returned no public sources for this website. This does not mean the website is safe.";
+
+function buildSummary(domain, evidence) {
+  const domainCount = evidence.filter(
+    (entry) => entry.category === CATEGORIES.DOMAIN_SPECIFIC
+  ).length;
+
+  if (domainCount === 0) {
+    return (
+      `No sources specifically mentioning ${domain} were found. ` +
+      `The search returned ${evidence.length} other source(s) to review. ` +
+      "This does not mean the website is safe."
+    );
+  }
+
+  const domainLabel = `${domainCount} source${domainCount === 1 ? "" : "s"}`;
+  return (
+    `Web search returned sources for review, including ${domainLabel} ` +
+    `that explicitly ${domainCount === 1 ? "mentions" : "mention"} ${domain}. ` +
+    "A mention is not proof of malicious activity. " +
+    "These results do not establish whether the website is safe or malicious."
+  );
+}
 
 const ERROR_RESPONSES = {
   config_missing: {
@@ -61,7 +82,8 @@ router.post("/", async (req, res) => {
   const domain = url.hostname;
 
   try {
-    const evidence = await searchTinyFish(buildInvestigationQuery(domain));
+    const results = await searchTinyFish(buildInvestigationQuery(domain));
+    const evidence = prepareEvidence(results, domain);
 
     if (evidence.length === 0) {
       return res.json({
@@ -76,7 +98,7 @@ router.post("/", async (req, res) => {
 
     return res.json({
       status: "research_available",
-      summary: SEARCH_SUMMARY,
+      summary: buildSummary(domain, evidence),
       domain,
       evidence,
       investigationType: "web_search",

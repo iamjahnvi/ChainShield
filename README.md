@@ -51,14 +51,16 @@ A successful response looks like:
 ```json
 {
   "status": "research_available",
-  "summary": "Web search returned sources for review. These results do not establish whether the website is safe or malicious.",
+  "summary": "Web search returned sources for review, including 1 source that explicitly mentions example.com. A mention is not proof of malicious activity. These results do not establish whether the website is safe or malicious.",
   "domain": "example.com",
   "evidence": [
     {
       "title": "Example source",
       "url": "https://source.example/report",
       "snippet": "Available search-result excerpt",
-      "source": "TinyFish Search"
+      "source": "TinyFish Search",
+      "category": "domain_specific",
+      "categoryReason": "The source URL is on the investigated hostname. Relevance to the domain does not establish maliciousness."
     }
   ],
   "investigationType": "web_search",
@@ -66,7 +68,13 @@ A successful response looks like:
 }
 ```
 
-If the search returns nothing, the response uses `"status": "no_results"` with an empty `evidence` array and a summary stating that this does not mean the website is safe.
+Every evidence item carries a transparent `category` with an explainable `categoryReason`:
+
+- `domain_specific` — the result URL or its text is about the investigated hostname (exact host, a subdomain of it, or a domain-focused text mention). Relevance is not proof of a threat; parent and sibling domains are never treated as the investigated hostname.
+- `general_information` — general security guidance that does not reference the hostname (including passing mentions).
+- `irrelevant_or_unclear` — weak or unrelated results.
+
+If the search returns nothing, the response uses `"status": "no_results"` with an empty `evidence` array and a summary stating that this does not mean the website is safe. If results exist but none refer to the hostname, the summary says exactly that.
 
 ## Load the extension in Chrome
 
@@ -76,7 +84,7 @@ If the search returns nothing, the response uses `"status": "no_results"` with a
 4. Select **Load unpacked** and choose this project's `extension` folder.
 5. Open a regular `http://` or `https://` website.
 6. Open the Extensions menu, pin ChainShield if desired, and select its icon.
-7. Select **Investigate this website**. While the backend searches, the popup shows a loading message; afterwards it shows the hostname, a **WEB SEARCH** badge, and the returned public sources with clickable titles (each opens in a new tab only when you click it).
+7. Select **Investigate this website**. While the backend searches, the popup shows a loading message; afterwards it shows the hostname, a **WEB SEARCH** badge, a note about direct hostname mentions, and the returned sources grouped into direct hostname references, general security resources, and weak or unclear matches (each title opens in a new tab only when you click it).
 8. Open a Chrome internal page such as `chrome://settings`, open ChainShield, and confirm it explains that the page cannot be investigated.
 
 To reload after code changes: revisit `chrome://extensions` and press the refresh icon on the ChainShield card, then reopen the popup.
@@ -89,10 +97,12 @@ To reload after code changes: revisit `chrome://extensions` and press the refres
 - `extension/popup.js` reads the active tab, blocks unsupported protocols, calls the local API, and displays loading, success, empty, and error states. Source links are only rendered as clickable when they validate as `http://` or `https://` URLs.
 - `server/package.json` declares Express, dotenv, and the commands to start and test the backend.
 - `server/src/app.js` loads `server/.env` with dotenv, configures the Express app, local development CORS, health endpoint, and JSON error handling.
-- `server/src/tinyfish.js` builds the search query, calls the TinyFish Search endpoint with the backend-held API key, applies a request timeout, and validates/normalizes search results.
+- `server/src/tinyfish.js` builds the focused search query (hostname plus scam, phishing, impersonation, fraud and security-report terms), calls the TinyFish Search endpoint with the backend-held API key, applies a request timeout, and validates/normalizes search results.
+- `server/src/classification.js` deduplicates results by canonical URL and conservatively classifies them into `domain_specific`, `general_information` and `irrelevant_or_unclear` with explainable reasons.
 - `server/src/routes/investigations.js` validates submitted URLs and maps search outcomes (results, no results, and upstream failures) to API responses.
 - `server/test/app.test.js` exercises the health endpoint and invalid URL cases.
 - `server/test/investigations.test.js` exercises the TinyFish integration with mocked responses (no live API quota is consumed).
+- `server/test/classification.test.js` unit-tests query construction, canonical deduplication and the classification edge cases.
 
 ## Development CORS
 
@@ -101,6 +111,7 @@ The API accepts browser cross-origin requests only when their origin matches the
 ## Prototype limitations
 
 - Results are limited to what a single web search returns; the absence of results is never a safety verdict, and the presence of results is not a security scan or verification.
+- Classification into categories is a conservative text/URL heuristic with explainable reasons; even `domain_specific` results only indicate relevance, not malicious activity.
 - The TinyFish API key stays in the backend only; the extension and API responses never receive it.
 - The extension expects the backend at `http://localhost:3000`.
 - The popup is manually verified in Chrome; automated browser/extension integration testing is not included.

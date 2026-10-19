@@ -121,7 +121,10 @@ test("valid investigation request returns validated TinyFish results", async () 
     snippet: "Example official website.",
     source: "TinyFish Search",
     position: 1,
-    siteName: "example-official"
+    siteName: "example-official",
+    category: "domain_specific",
+    categoryReason:
+      "The source URL is on the investigated hostname. Relevance to the domain does not establish maliciousness."
   });
 
   assert.deepEqual(body.evidence[1], {
@@ -129,14 +132,19 @@ test("valid investigation request returns validated TinyFish results", async () 
     url: "https://cert.example.org/advisory/123",
     snippet: "Advisory text",
     source: "TinyFish Search",
-    siteName: "CERT"
+    siteName: "CERT",
+    category: "general_information",
+    categoryReason:
+      "General security-related source that does not mention the investigated hostname."
   });
   assert.ok(!("position" in body.evidence[1]));
 
   assert.deepEqual(body.evidence[2], {
     title: "https://plain.example.net/",
     url: "https://plain.example.net/",
-    source: "TinyFish Search"
+    source: "TinyFish Search",
+    category: "irrelevant_or_unclear",
+    categoryReason: "No clear connection to the investigated hostname."
   });
   assert.ok(!("snippet" in body.evidence[2]));
   assert.ok(!("position" in body.evidence[2]));
@@ -145,13 +153,18 @@ test("valid investigation request returns validated TinyFish results", async () 
   assert.deepEqual(body.evidence[3], {
     title: "Mention without link",
     snippet: "no url here",
-    source: "TinyFish Search"
+    source: "TinyFish Search",
+    category: "irrelevant_or_unclear",
+    categoryReason: "No clear connection to the investigated hostname."
   });
   assert.ok(!("url" in body.evidence[3]));
 
   assert.deepEqual(body.evidence[4], {
     title: "Unsafe link",
-    source: "TinyFish Search"
+    source: "TinyFish Search",
+    category: "general_information",
+    categoryReason:
+      "General security-related source that does not mention the investigated hostname."
   });
   assert.ok(!("url" in body.evidence[4]));
 
@@ -163,6 +176,9 @@ test("valid investigation request returns validated TinyFish results", async () 
   assert.ok(query.includes("www.example.com"));
   assert.ok(query.includes("security report"));
   assert.ok(query.includes("impersonation"));
+  assert.ok(query.includes("scam"));
+  assert.ok(query.includes("phishing"));
+  assert.ok(query.includes("fraud"));
   assert.ok(!captured.url.includes(TEST_API_KEY));
 
   assert.equal(captured.init.method, "GET");
@@ -346,4 +362,138 @@ test("the API key never appears in responses or logged output", async () => {
   assert.equal(successCalls.length, 1);
   assert.equal(successCalls[0].init.headers["X-API-Key"], TEST_API_KEY);
   assert.ok(!successCalls[0].url.includes(TEST_API_KEY));
+});
+
+test("results are deduplicated by canonical URL", async () => {
+  setSearchFetch(async () =>
+    jsonResponse({
+      results: [
+        { title: "First", url: "https://shop.example.com/page?utm_source=x&utm_medium=y" },
+        { title: "Duplicate casing", url: "HTTPS://SHOP.EXAMPLE.COM/page" },
+        { title: "Duplicate slash", url: "https://shop.example.com/page/" },
+        { title: "Sorted params", url: "https://shop.example.com/page?b=2&a=1" },
+        { title: "Duplicate param order", url: "https://shop.example.com/page?a=1&b=2" },
+        { title: "Fragment variant", url: "https://shop.example.com/page#section" },
+        { title: "Distinct scheme", url: "http://shop.example.com/page" },
+        { title: "Distinct path", url: "https://shop.example.com/other" },
+        { title: "No link", snippet: "kept" },
+        { title: "No link", snippet: "kept" }
+      ]
+    })
+  );
+
+  const { response, body } = await postInvestigation({
+    url: "https://shop.example.com"
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    body.evidence.map((entry) => entry.title),
+    ["First", "Sorted params", "Fragment variant", "Distinct scheme", "Distinct path", "No link", "No link"]
+  );
+});
+
+test("parent and sibling domains are not treated as the investigated subdomain", async () => {
+  setSearchFetch(async () =>
+    jsonResponse({
+      results: [
+        { title: "Parent site", url: "https://example.com/home", snippet: "Example parent site" },
+        { title: "Sibling host", url: "https://sibling.example.com/x", snippet: "Sibling page" },
+        { title: "Child host", url: "https://login.shop.example.com/", snippet: "Child page" },
+        { title: "Exact host", url: "https://shop.example.com/deals", snippet: "Deals page" }
+      ]
+    })
+  );
+
+  const { response, body } = await postInvestigation({
+    url: "https://shop.example.com"
+  });
+
+  assert.equal(response.status, 200);
+  const byTitle = Object.fromEntries(body.evidence.map((e) => [e.title, e]));
+
+  assert.equal(byTitle["Parent site"].category, "irrelevant_or_unclear");
+  assert.equal(
+    byTitle["Parent site"].categoryReason,
+    "Refers to the parent domain rather than the investigated hostname."
+  );
+  assert.equal(byTitle["Sibling host"].category, "irrelevant_or_unclear");
+  assert.equal(byTitle["Child host"].category, "domain_specific");
+  assert.match(byTitle["Child host"].categoryReason, /subdomain of the investigated hostname/i);
+  assert.equal(byTitle["Exact host"].category, "domain_specific");
+  assert.match(byTitle["Exact host"].categoryReason, /on the investigated hostname/i);
+});
+
+test("passing hostname mentions are not classified as domain-specific", async () => {
+  setSearchFetch(async () =>
+    jsonResponse({
+      results: [
+        {
+          title: "Weekly crypto roundup mentioning shop.example.com among 20 sites",
+          url: "https://news.example.org/roundup"
+        },
+        {
+          title: "Shop.example.com review: is it a scam or legitimate store?",
+          url: "https://reviews.example.net/shop"
+        }
+      ]
+    })
+  );
+
+  const { response, body } = await postInvestigation({
+    url: "https://shop.example.com"
+  });
+
+  assert.equal(response.status, 200);
+  const byTitle = Object.fromEntries(body.evidence.map((e) => [e.title, e]));
+
+  const passing = byTitle[
+    "Weekly crypto roundup mentioning shop.example.com among 20 sites"
+  ];
+  assert.equal(passing.category, "irrelevant_or_unclear");
+  assert.match(passing.categoryReason, /passing mention/i);
+
+  const focused = byTitle[
+    "Shop.example.com review: is it a scam or legitimate store?"
+  ];
+  assert.equal(focused.category, "domain_specific");
+  assert.match(focused.categoryReason, /does not establish maliciousness/i);
+
+  assert.match(body.summary, /A mention is not proof of malicious activity/i);
+  assert.ok(!JSON.stringify(body).includes(TEST_API_KEY));
+});
+
+test("zero domain-specific results produce an explicit no-domain-evidence summary", async () => {
+  setSearchFetch(async () =>
+    jsonResponse({
+      results: [
+        { title: "How to spot phishing", url: "https://guides.example.org/phishing" },
+        { title: "Cat food reviews", url: "https://pets.example.org/cats" }
+      ]
+    })
+  );
+
+  const { response, body } = await postInvestigation({ url: "https://example.com" });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "research_available");
+  assert.equal(
+    body.evidence.filter((e) => e.category === "domain_specific").length,
+    0
+  );
+  assert.match(body.summary, /No sources specifically mentioning example\.com were found/i);
+  assert.match(body.summary, /does not mean the website is safe/i);
+});
+
+test("upstream 503 responses map to a generic 502 response", async () => {
+  setSearchFetch(async () =>
+    jsonResponse({ error: "upstream maintenance" }, 503)
+  );
+
+  const { response, body } = await postInvestigation({ url: "https://example.com" });
+
+  assert.equal(response.status, 502);
+  assert.match(body.error, /unavailable/i);
+  assert.ok(!JSON.stringify(body).includes("upstream maintenance"));
+  assert.ok(!capturedLogs.join("\n").includes(TEST_API_KEY));
 });

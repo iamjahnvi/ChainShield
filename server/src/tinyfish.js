@@ -34,8 +34,8 @@ function getTimeoutMs(env = process.env) {
 
 function buildInvestigationQuery(hostname) {
   return (
-    `${hostname} official website security report ` +
-    "impersonation phishing public disclosure"
+    `${hostname} scam phishing impersonation fraud ` +
+    "security report"
   );
 }
 
