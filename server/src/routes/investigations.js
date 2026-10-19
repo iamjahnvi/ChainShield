@@ -18,7 +18,7 @@ function buildSummary(domain, evidence) {
 
   if (domainCount === 0) {
     return (
-      `No sources specifically mentioning ${domain} were found. ` +
+      `No domain-specific sources about ${domain} were found. ` +
       `The search returned ${evidence.length} other source(s) to review. ` +
       "This does not mean the website is safe."
     );
@@ -27,8 +27,7 @@ function buildSummary(domain, evidence) {
   const domainLabel = `${domainCount} source${domainCount === 1 ? "" : "s"}`;
   return (
     `Web search returned sources for review, including ${domainLabel} ` +
-    `that explicitly ${domainCount === 1 ? "mentions" : "mention"} ${domain}. ` +
-    "A mention is not proof of malicious activity. " +
+    `related to ${domain}. Relevance is not proof of malicious activity. ` +
     "These results do not establish whether the website is safe or malicious."
   );
 }

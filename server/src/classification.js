@@ -70,35 +70,30 @@ function canonicalizeUrl(value) {
   const scheme = parsed.protocol.replace(/:$/, "").toLowerCase();
   const host = parsed.hostname.toLowerCase();
   const port = parsed.port ? `:${parsed.port}` : "";
-
-  const keptParams = [];
-  for (const [key, val] of parsed.searchParams) {
-    const lowerKey = key.toLowerCase();
-    if (lowerKey.startsWith("utm_") || TRACKING_PARAMS.includes(lowerKey)) {
-      continue;
-    }
-    keptParams.push([key, val]);
-  }
-  keptParams.sort((a, b) => {
-    if (a[0] === b[0]) {
-      return a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0;
-    }
-    return a[0] < b[0] ? -1 : 1;
-  });
+  const searchParams =
+    parsed.search === ""
+      ? []
+      : parsed.search
+          .slice(1)
+          .split("&")
+          .filter((parameter) => {
+            const rawKey = parameter.split("=", 1)[0];
+            let key;
+            try {
+              key = decodeURIComponent(rawKey.replace(/\+/g, " ")).toLowerCase();
+            } catch {
+              return true;
+            }
+            return !key.startsWith("utm_") && !TRACKING_PARAMS.includes(key);
+          });
   const search =
-    keptParams.length > 0
-      ? `?${keptParams.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&")}`
-      : "";
+    searchParams.length > 0
+      ? `?${searchParams.join("&")}`
+      : parsed.search === "" && parsed.href.includes("?")
+        ? "?"
+        : "";
 
-  let path = parsed.pathname;
-  if (path.length > 1 && path.endsWith("/")) {
-    path = path.replace(/\/+$/, "");
-    if (path === "") {
-      path = "/";
-    }
-  }
-
-  return `${scheme}://${host}${port}${path}${search}${parsed.hash}`;
+  return `${scheme}://${host}${port}${parsed.pathname}${search}${parsed.hash}`;
 }
 
 function dedupeByUrl(entries) {

@@ -203,14 +203,32 @@ test("empty search results return a neutral no_results response", async () => {
   assert.match(body.summary, /does not mean the website is safe/i);
 });
 
-test("missing results field is treated as no results", async () => {
-  setSearchFetch(async () => jsonResponse({}));
+test("missing, null, and non-array results are malformed upstream responses", async (t) => {
+  const cases = [
+    { name: "missing results", payload: {} },
+    { name: "null results", payload: { results: null } },
+    { name: "non-array results", payload: { results: "invalid" } }
+  ];
 
-  const { response, body } = await postInvestigation({ url: "https://example.com" });
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      setSearchFetch(async () =>
+        jsonResponse({
+          ...testCase.payload,
+          sensitiveDetail: TEST_API_KEY
+        })
+      );
 
-  assert.equal(response.status, 200);
-  assert.equal(body.status, "no_results");
-  assert.deepEqual(body.evidence, []);
+      const { response, body } = await postInvestigation({
+        url: "https://example.com"
+      });
+
+      assert.equal(response.status, 502);
+      assert.match(body.error, /unexpected response/i);
+      assert.ok(!JSON.stringify(body).includes(TEST_API_KEY));
+      assert.ok(!capturedLogs.join("\n").includes(TEST_API_KEY));
+    });
+  }
 });
 
 test("missing API key returns a clear configuration error without calling TinyFish", async () => {
@@ -364,7 +382,7 @@ test("the API key never appears in responses or logged output", async () => {
   assert.ok(!successCalls[0].url.includes(TEST_API_KEY));
 });
 
-test("results are deduplicated by canonical URL", async () => {
+test("results are deduplicated without merging distinct URLs", async () => {
   setSearchFetch(async () =>
     jsonResponse({
       results: [
@@ -389,7 +407,17 @@ test("results are deduplicated by canonical URL", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(
     body.evidence.map((entry) => entry.title),
-    ["First", "Sorted params", "Fragment variant", "Distinct scheme", "Distinct path", "No link", "No link"]
+    [
+      "First",
+      "Duplicate slash",
+      "Sorted params",
+      "Duplicate param order",
+      "Fragment variant",
+      "Distinct scheme",
+      "Distinct path",
+      "No link",
+      "No link"
+    ]
   );
 });
 
@@ -459,8 +487,31 @@ test("passing hostname mentions are not classified as domain-specific", async ()
   assert.equal(focused.category, "domain_specific");
   assert.match(focused.categoryReason, /does not establish maliciousness/i);
 
-  assert.match(body.summary, /A mention is not proof of malicious activity/i);
+  assert.match(body.summary, /Relevance is not proof of malicious activity/i);
   assert.ok(!JSON.stringify(body).includes(TEST_API_KEY));
+});
+
+test("summary describes evidence hosted on the investigated domain as relevant", async () => {
+  setSearchFetch(async () =>
+    jsonResponse({
+      results: [
+        {
+          title: "Welcome",
+          url: "https://example.com/about",
+          snippet: "A page with no hostname mention in its text."
+        }
+      ]
+    })
+  );
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com"
+  });
+
+  assert.equal(response.status, 200);
+  assert.match(body.summary, /1 source related to example\.com/i);
+  assert.match(body.summary, /Relevance is not proof of malicious activity/i);
+  assert.doesNotMatch(body.summary, /explicitly mentions/i);
 });
 
 test("zero domain-specific results produce an explicit no-domain-evidence summary", async () => {
@@ -481,7 +532,7 @@ test("zero domain-specific results produce an explicit no-domain-evidence summar
     body.evidence.filter((e) => e.category === "domain_specific").length,
     0
   );
-  assert.match(body.summary, /No sources specifically mentioning example\.com were found/i);
+  assert.match(body.summary, /No domain-specific sources about example\.com were found/i);
   assert.match(body.summary, /does not mean the website is safe/i);
 });
 

@@ -68,7 +68,7 @@ function normalizeEvidence(payload) {
 
   const { results } = payload;
   if (results === undefined || results === null) {
-    return [];
+    throw new TinyFishError("bad_response", "Search response results field was missing.");
   }
 
   if (!Array.isArray(results)) {

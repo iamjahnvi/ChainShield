@@ -20,10 +20,10 @@ test("investigation query targets the exact hostname with focused threat terms",
   assert.ok(query.includes("security report"));
 });
 
-test("canonicalizeUrl normalizes casing, tracking params, ordering and slashes", () => {
+test("canonicalizeUrl normalizes casing and removes tracking params", () => {
   assert.equal(
     canonicalizeUrl("HTTPS://Example.COM/Path/?utm_source=news&b=2&a=1#frag"),
-    "https://example.com/Path?a=1&b=2#frag"
+    "https://example.com/Path/?b=2&a=1#frag"
   );
   assert.equal(
     canonicalizeUrl("https://example.com/"),
@@ -51,11 +51,15 @@ test("canonicalizeUrl preserves scheme and fragments and rejects non-http URLs",
     canonicalizeUrl("https://example.com/page#one"),
     canonicalizeUrl("https://example.com/page#two")
   );
+  assert.notEqual(
+    canonicalizeUrl("https://example.com/page?"),
+    canonicalizeUrl("https://example.com/page")
+  );
   assert.equal(canonicalizeUrl("javascript:alert(1)"), "");
   assert.equal(canonicalizeUrl("not a url"), "");
 });
 
-test("prepareEvidence deduplicates only safe canonical matches", () => {
+test("prepareEvidence deduplicates matching URLs after tracking cleanup", () => {
   const entries = [
     { title: "Bare", url: "https://shop.example.com/page" },
     { title: "Tracked", url: "https://shop.example.com/page?utm_campaign=x" },
@@ -64,6 +68,8 @@ test("prepareEvidence deduplicates only safe canonical matches", () => {
     { title: "Params b", url: "https://shop.example.com/page?a=1&b=2" },
     { title: "Fragment", url: "https://shop.example.com/page#top" },
     { title: "Scheme", url: "http://shop.example.com/page" },
+    { title: "Repeated params", url: "https://shop.example.com/page?a=1&a=2" },
+    { title: "Reordered repeated params", url: "https://shop.example.com/page?a=2&a=1" },
     { title: "No url", snippet: "first" },
     { title: "No url", snippet: "second" }
   ];
@@ -72,7 +78,31 @@ test("prepareEvidence deduplicates only safe canonical matches", () => {
 
   assert.deepEqual(
     prepared.map((entry) => entry.title),
-    ["Bare", "Params a", "Fragment", "Scheme", "No url", "No url"]
+    [
+      "Bare",
+      "Cased",
+      "Params a",
+      "Params b",
+      "Fragment",
+      "Scheme",
+      "Repeated params",
+      "Reordered repeated params",
+      "No url",
+      "No url"
+    ]
+  );
+});
+
+test("deduplication preserves trailing slashes and query parameter order", () => {
+  const entries = [
+    { title: "No slash", url: "https://shop.example.com/page?a=1&b=2" },
+    { title: "Trailing slash", url: "https://shop.example.com/page/?a=1&b=2" },
+    { title: "Reordered parameters", url: "https://shop.example.com/page?b=2&a=1" }
+  ];
+
+  assert.deepEqual(
+    prepareEvidence(entries, "shop.example.com").map((entry) => entry.title),
+    ["No slash", "Trailing slash", "Reordered parameters"]
   );
 });
 
