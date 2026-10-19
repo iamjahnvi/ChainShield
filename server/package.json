@@ -9,6 +9,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "dotenv": "^18.0.8",
     "express": "^4.21.2"
   }
 }
