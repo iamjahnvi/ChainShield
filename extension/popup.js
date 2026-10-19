@@ -1,4 +1,5 @@
 const API_URL = "http://localhost:3000/api/investigations";
+const VALID_STATUSES = ["research_available", "no_results"];
 
 const button = document.querySelector("#investigate-button");
 const domainLabel = document.querySelector("#page-domain");
@@ -26,22 +27,76 @@ function isSupportedUrl(value) {
   }
 }
 
+function buildEvidenceItem(entry) {
+  const item = document.createElement("li");
+
+  const title =
+    typeof entry.title === "string" && entry.title.trim() !== ""
+      ? entry.title.trim()
+      : "";
+  const url =
+    typeof entry.url === "string" && isSupportedUrl(entry.url) ? entry.url : "";
+
+  if (url) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.textContent = title || url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    item.append(link);
+  } else if (title) {
+    const label = document.createElement("span");
+    label.textContent = title;
+    item.append(label);
+  }
+
+  if (typeof entry.snippet === "string" && entry.snippet.trim() !== "") {
+    const snippet = document.createElement("p");
+    snippet.className = "evidence-snippet";
+    snippet.textContent = entry.snippet.trim();
+    item.append(snippet);
+  }
+
+  const metaParts = [];
+  if (typeof entry.siteName === "string" && entry.siteName.trim() !== "") {
+    metaParts.push(entry.siteName.trim());
+  }
+  if (typeof entry.position === "number" && Number.isFinite(entry.position)) {
+    metaParts.push(`Result #${entry.position}`);
+  }
+  metaParts.push(
+    typeof entry.source === "string" && entry.source.trim() !== ""
+      ? entry.source.trim()
+      : "Web search"
+  );
+
+  const meta = document.createElement("p");
+  meta.className = "evidence-meta";
+  meta.textContent = metaParts.join(" · ");
+  item.append(meta);
+
+  return item;
+}
+
 function displayResult(data) {
-  resultStatus.textContent = `Status: ${data.status}`;
+  resultStatus.textContent =
+    data.status === "no_results"
+      ? "Web search found no sources — this is not a safety verdict."
+      : "Web search sources — not a verified security finding.";
   resultSummary.textContent = data.summary;
   evidenceList.replaceChildren();
 
-  if (data.evidence.length === 0) {
+  if (!Array.isArray(data.evidence) || data.evidence.length === 0) {
     const item = document.createElement("li");
-    item.textContent = "No evidence items in this demo response.";
+    item.className = "evidence-empty";
+    item.textContent =
+      data.status === "no_results"
+        ? "No public sources were found for this website."
+        : "No sources were returned.";
     evidenceList.append(item);
   } else {
-    for (const evidence of data.evidence) {
-      const item = document.createElement("li");
-      item.textContent = typeof evidence === "string"
-        ? evidence
-        : JSON.stringify(evidence);
-      evidenceList.append(item);
+    for (const entry of data.evidence) {
+      evidenceList.append(buildEvidenceItem(entry));
     }
   }
 
@@ -63,7 +118,7 @@ button.addEventListener("click", async () => {
 
     const domain = new URL(tab.url).hostname;
     domainLabel.textContent = `Website: ${domain}`;
-    setMessage("Sending the URL to the local demo server…");
+    setMessage(`Searching the web for public sources about ${domain}…`, "loading");
 
     let response;
     try {
@@ -92,7 +147,8 @@ button.addEventListener("click", async () => {
     }
 
     if (
-      data.status !== "not_yet_investigated" ||
+      !VALID_STATUSES.includes(data.status) ||
+      data.investigationType !== "web_search" ||
       typeof data.summary !== "string" ||
       !Array.isArray(data.evidence) ||
       typeof data.domain !== "string"
@@ -101,7 +157,12 @@ button.addEventListener("click", async () => {
     }
 
     displayResult(data);
-    setMessage("Demo result received. No real security investigation was performed.", "success");
+
+    if (data.status === "no_results") {
+      setMessage("Search finished, but no public sources were found for this website.");
+    } else {
+      setMessage("Web search complete. Review the sources below — no security scan was performed.", "success");
+    }
   } catch (error) {
     setMessage(error instanceof Error ? error.message : "Something went wrong while contacting the server.", "error");
   } finally {

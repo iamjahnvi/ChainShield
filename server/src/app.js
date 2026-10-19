@@ -1,3 +1,7 @@
+const path = require("path");
+
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
 const express = require("express");
 const investigationsRouter = require("./routes/investigations");
 
@@ -47,6 +51,15 @@ app.use((err, req, res, next) => {
 
 if (require.main === module) {
   const port = Number(process.env.PORT) || 3000;
+
+  const apiKey = process.env.TINYFISH_API_KEY;
+  if (typeof apiKey !== "string" || apiKey.trim() === "") {
+    console.error(
+      "ChainShield configuration warning: TINYFISH_API_KEY is not set. " +
+        "Add it to server/.env; investigation requests will fail with a configuration error until it is set."
+    );
+  }
+
   app.listen(port, () => {
     console.log(`ChainShield demo API listening at http://localhost:${port}`);
   });

@@ -22,18 +22,19 @@
       <button id="investigate-button" type="button">Investigate this website</button>
       <p id="page-domain" class="page-domain" aria-live="polite"></p>
       <p id="message" class="message" role="status" aria-live="polite">
-        This prototype returns demo data only.
+        Results come from a web search, not a security scan.
       </p>
 
       <section id="result" class="result" aria-labelledby="result-heading" hidden>
         <div class="result-heading-row">
-          <h2 id="result-heading">Investigation result</h2>
-          <span class="demo-badge">DEMO</span>
+          <h2 id="result-heading">Web search result</h2>
+          <span class="search-badge">WEB SEARCH</span>
         </div>
         <p id="result-status" class="result-status"></p>
         <p id="result-summary" class="result-summary"></p>
-        <h3>Evidence</h3>
+        <h3>Public sources</h3>
         <ul id="evidence-list" class="evidence-list"></ul>
+        <p class="result-note">These are web search results, not verified security findings.</p>
       </section>
 
       <footer>No real security scan has been performed.</footer>

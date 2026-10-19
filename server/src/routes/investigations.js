@@ -1,8 +1,46 @@
 const express = require("express");
+const {
+  TinyFishError,
+  buildInvestigationQuery,
+  searchTinyFish
+} = require("../tinyfish");
 
 const router = express.Router();
 
-router.post("/", (req, res) => {
+const SEARCH_SUMMARY =
+  "Web search returned sources for review. These results do not establish whether the website is safe or malicious.";
+const NO_RESULTS_SUMMARY =
+  "The web search returned no public sources for this website. This does not mean the website is safe.";
+
+const ERROR_RESPONSES = {
+  config_missing: {
+    status: 503,
+    error:
+      "The server is missing its search API configuration. Set TINYFISH_API_KEY in server/.env and restart the backend."
+  },
+  timeout: {
+    status: 504,
+    error: "The web search timed out. Please try again."
+  },
+  rate_limited: {
+    status: 503,
+    error: "The web search service is busy. Please try again shortly."
+  },
+  upstream: {
+    status: 502,
+    error: "The web search service is unavailable. Please try again later."
+  },
+  bad_response: {
+    status: 502,
+    error: "The web search service returned an unexpected response. Please try again later."
+  },
+  network: {
+    status: 502,
+    error: "The web search service is unreachable. Please try again later."
+  }
+};
+
+router.post("/", async (req, res) => {
   const { url: submittedUrl } = req.body || {};
 
   if (typeof submittedUrl !== "string" || submittedUrl.trim() === "") {
@@ -20,12 +58,51 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: "Only HTTP and HTTPS URLs are supported." });
   }
 
-  return res.json({
-    status: "not_yet_investigated",
-    summary: "This is a demo response. No real security investigation has been performed.",
-    evidence: [],
-    domain: url.hostname
-  });
+  const domain = url.hostname;
+
+  try {
+    const evidence = await searchTinyFish(buildInvestigationQuery(domain));
+
+    if (evidence.length === 0) {
+      return res.json({
+        status: "no_results",
+        summary: NO_RESULTS_SUMMARY,
+        domain,
+        evidence: [],
+        investigationType: "web_search",
+        demo: false
+      });
+    }
+
+    return res.json({
+      status: "research_available",
+      summary: SEARCH_SUMMARY,
+      domain,
+      evidence,
+      investigationType: "web_search",
+      demo: false
+    });
+  } catch (error) {
+    const isTinyFishError = error instanceof TinyFishError;
+    const code = isTinyFishError ? error.code : "unknown";
+    const mapped =
+      ERROR_RESPONSES[code] || {
+        status: 500,
+        error: "Something went wrong while running the web search."
+      };
+    const upstreamStatus =
+      isTinyFishError && error.upstreamStatus !== undefined
+        ? `, upstreamStatus=${error.upstreamStatus}`
+        : "";
+
+    console.error(
+      `[investigations] web search failed (code=${code}${upstreamStatus}, errorName=${
+        error && error.name ? error.name : "unknown"
+      })`
+    );
+
+    return res.status(mapped.status).json({ error: mapped.error });
+  }
 });
 
 module.exports = router;
