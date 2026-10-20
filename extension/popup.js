@@ -257,6 +257,28 @@ function displayContractAnalysis(analysis) {
   status.textContent = statusMessages[analysis.status] || statusMessages.unavailable;
   contractAnalysisDetails.append(status);
 
+  const reasonMessages = {
+    config_missing: "Etherscan is not configured on the backend.",
+    timeout: "The Etherscan source lookup timed out.",
+    rate_limited: "Etherscan rate limit was reached.",
+    network: "Etherscan could not be reached.",
+    http_rejection: "Etherscan rejected the source lookup.",
+    api_error: "Etherscan could not complete the source lookup.",
+    response_too_large: "The Etherscan response exceeded the allowed size.",
+    bad_response: "Etherscan returned malformed source data.",
+    provider_error: "The Etherscan source lookup failed.",
+    rpc_chain_unavailable: "The Ethereum network could not be confirmed by RPC.",
+    source_unverified: "Source is not verified on Etherscan.",
+    source_unavailable: "Etherscan source lookup did not complete.",
+    malformed_source_response: "The source response could not be parsed.",
+    malformed_proxy_metadata: "Proxy metadata was malformed.",
+    missing_implementation_address: "Etherscan did not provide an implementation address.",
+    invalid_implementation_address: "The implementation address failed validation and was not queried.",
+    cycle_detected: "A repeated address was detected; traversal stopped.",
+    hop_limit_exceeded: "The maximum of three implementation hops was reached.",
+    capability_analysis_incomplete: "Some source capability indicators could not be classified."
+  };
+
   const addDetail = (label, value) => {
     if (typeof value !== "string" || value.trim() === "") {
       return;
@@ -269,6 +291,12 @@ function displayContractAnalysis(analysis) {
 
   addDetail("Chain ID", analysis.chainId);
   addDetail("Network", analysis.network);
+  if (typeof analysis.reason === "string") {
+    addDetail(
+      "Analysis limitation",
+      reasonMessages[analysis.reason] || "Part of the analysis could not be completed."
+    );
+  }
   if (typeof analysis.sourceVerified === "boolean") {
     addDetail("Source verified", analysis.sourceVerified ? "Yes" : "No");
   }
@@ -366,6 +394,12 @@ function displayContractAnalysis(analysis) {
         "Layer status",
         layerStatusMessages[layer.status] || "Not analyzed"
       );
+      if (typeof layer.reason === "string") {
+        addDetail(
+          "Layer limitation",
+          reasonMessages[layer.reason] || "This layer could not be fully analyzed."
+        );
+      }
       addDetail("Contract", layer.contractName);
       if (typeof layer.implementationAddress === "string") {
         addDetail("Next implementation address", layer.implementationAddress);
