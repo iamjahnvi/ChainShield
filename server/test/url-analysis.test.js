@@ -34,6 +34,20 @@ test("flags explicit punycode labels for review without calling them malicious",
   assert.doesNotMatch(JSON.stringify(findings), /user|password|private|\/path|\?/i);
 });
 
+test("flags a legitimate Unicode domain after URL parsing converts it to punycode", () => {
+  const url = new URL("https://bücher.de/");
+  assert.equal(url.hostname, "xn--bcher-kva.de");
+
+  const findings = analyzeUrl(url);
+  assert.deepEqual(
+    findings.map((finding) => ({
+      ruleId: finding.ruleId,
+      observedValue: finding.observedFeature.value
+    })),
+    [{ ruleId: "punycode_hostname_label", observedValue: "xn--bcher-kva" }]
+  );
+});
+
 test("flags four or more labels before the final two hostname labels", () => {
   const labels = ["one", "two", "three", "four", "example", "com"];
   const findings = findingsFor(`https://${labels.join(".")}/`);
@@ -44,6 +58,20 @@ test("flags four or more labels before the final two hostname labels", () => {
     label: "Labels before final two",
     value: "4"
   });
+});
+
+test("counts labels before the final two even when the public suffix has multiple labels", () => {
+  const url = new URL("https://a.b.c.example.co.uk/");
+  const findings = analyzeUrl(url);
+
+  assert.equal(url.hostname, "a.b.c.example.co.uk");
+  assert.deepEqual(
+    findings.map((finding) => ({
+      ruleId: finding.ruleId,
+      observedValue: finding.observedFeature.value
+    })),
+    [{ ruleId: "many_subdomain_labels", observedValue: "4" }]
+  );
 });
 
 test("does not flag ordinary domains or hostnames below the conservative depth threshold", () => {
