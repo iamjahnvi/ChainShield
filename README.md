@@ -211,9 +211,10 @@ Open `server/.env` and add your own provider keys:
 TINYFISH_API_KEY=your_tinyfish_api_key
 GOOGLE_SAFE_BROWSING_API_KEY=your_google_safe_browsing_api_key
 ETH_RPC_URL=your_ethereum_rpc_https_endpoint
+ETHERSCAN_API_KEY=your_etherscan_api_key
 ```
 
-Replace the placeholders with your own provider values. `ETH_RPC_URL` must be an HTTPS Ethereum JSON-RPC endpoint; keep any provider credential in this backend-only setting. Never commit this file or share its contents. Restrict the Google key to the Safe Browsing API in Google Cloud.
+Create a free Etherscan account and generate an API key in its API dashboard. Replace the placeholders with your own provider values. `ETH_RPC_URL` must be an HTTPS Ethereum JSON-RPC endpoint. Keep both RPC credentials and `ETHERSCAN_API_KEY` in this backend-only file; never commit or share its contents. Restart the backend after changing environment variables. Restrict the Google key to the Safe Browsing API in Google Cloud.
 
 ### 4. Run the tests
 
@@ -279,9 +280,10 @@ After changing extension files, return to `chrome://extensions`, click **Reload*
 | `GOOGLE_SAFE_BROWSING_API_KEY` | `server/.env` | Authenticates backend URL lookups with Google Safe Browsing |
 | `ETH_RPC_URL` | `server/.env` | Backend-only HTTPS Ethereum JSON-RPC endpoint, used only when a contract address is submitted |
 | `ETH_RPC_TIMEOUT_MS` | Backend environment | Optional timeout for each Ethereum JSON-RPC request; defaults to `6000` ms |
+| `ETHERSCAN_API_KEY` | `server/.env` | Backend-only Etherscan API key for verified source lookups on Ethereum Mainnet |
 | `PORT` | Backend environment | Optional server port; defaults to `3000` |
 
-The extension currently expects the API at `http://localhost:3000`. If you change the backend port, update the API URL in `extension/popup.js` to match.
+The extension currently expects the API at `http://localhost:3000`. If you change the backend port, update the API URL in `extension/popup.js` to match. Restart the backend after changing `ETHERSCAN_API_KEY`; the key is never sent to the extension.
 
 The Google Safe Browsing integration is for non-commercial development use. Google directs commercial users to Web Risk. The submitted URL is sent to Google for lookup. Positive matches are cached in memory only for the provider's returned cache duration; no lookup history is persisted. Do not put either provider key in the extension's JavaScript, HTML, manifest, or any response sent to the browser.
 
@@ -395,6 +397,10 @@ Google requires qualifying language for reported threats, a linked “Advisory p
 
 `ethereumAssessment` is an optional-address, read-only lookup against the backend-configured Ethereum RPC endpoint. Its status is `not_requested`, `available`, or `unavailable`. When available, it reports the chain ID, latest block, and whether `eth_getCode` returned bytecode at the latest block. `0x` means no bytecode was returned at that chain and block; it does not prove that the address is an externally owned account. Bytecode presence or absence does not establish whether an address or contract is safe or malicious. Raw bytecode is not returned.
 
+When `contractAddress` is supplied, `contractAnalysis` is an additional, independent result. It uses the chain reported by Ethereum RPC and retrieves verified source and proxy metadata from Etherscan only when that chain is Ethereum Mainnet (chain ID `0x1`). For a reported proxy, it makes one separate lookup for the validated implementation address; it does not recurse through further proxies. Results distinguish `available`, `unverified`, `unsupported_chain`, `unavailable`, and `incomplete`.
+
+Source indicators cover possible minting, pause, address restriction, upgrade, and administrative capabilities. The analyzer uses source-pattern heuristics and does not fully parse Solidity or prove effective access control, exploitability, current state, or malicious intent. Proxy metadata and verified source can help identify implementation logic, but unavailable or unverified source leaves analysis incomplete. Detected capabilities are not necessarily vulnerabilities, and no findings do not establish that a contract is safe or non-malicious. The analysis is currently Ethereum Mainnet only and never returns raw source code.
+
 ### Response fields
 
 | Field | Description |
@@ -408,6 +414,7 @@ Google requires qualifying language for reported threats, a linked “Advisory p
 | `threatAssessment` | Separate Google Safe Browsing lookup result; it does not use TinyFish relevance as a threat score. |
 | `urlSignals` | Separate structural URL heuristic findings; these do not change the Google Safe Browsing status. |
 | `ethereumAssessment` | Optional read-only Ethereum account/code lookup, separate from search relevance and Safe Browsing. |
+| `contractAnalysis` | Optional Etherscan verified-source capability analysis, independent from all other provider results. |
 
 Evidence items may contain `title`, `url`, `snippet`, `source`, `position`, `siteName`, `category`, and `categoryReason`, depending on the available upstream data and normalization.
 

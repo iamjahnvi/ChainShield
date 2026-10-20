@@ -193,6 +193,14 @@ h2 {
   background: #fff;
 }
 
+.contract-analysis {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #dce7e2;
+  border-radius: 11px;
+  background: #fff;
+}
+
 .threat-badge {
   padding: 4px 7px;
   border-radius: 5px;
@@ -223,8 +231,21 @@ h2 {
   letter-spacing: 0.35px;
 }
 
+.contract-analysis-badge {
+  padding: 4px 7px;
+  border-radius: 5px;
+  color: #1c4b7a;
+  background: #e3effc;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.35px;
+}
+
 .ethereum-detail,
-.ethereum-status {
+.ethereum-status,
+.contract-analysis-detail,
+.contract-analysis-status,
+.contract-capability {
   margin: 9px 0 0;
   color: #53635f;
   font-size: 11px;
@@ -232,7 +253,48 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.contract-analysis-status {
+  font-weight: 700;
+}
+
+.contract-analysis-subheading {
+  margin-top: 13px;
+}
+
+.contract-capability {
+  padding-top: 8px;
+  border-top: 1px solid #eef3f0;
+}
+
+.contract-capability-title {
+  margin: 0;
+  color: #314b47;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.contract-capability-explanation,
+.contract-capability-limitation,
+.contract-capability-evidence {
+  margin: 4px 0 0;
+}
+
+.contract-capability-limitation,
+.contract-capability-evidence {
+  color: #778580;
+  font-size: 10px;
+}
+
 .ethereum-disclaimer {
+  margin: 10px 0 0;
+  padding-top: 9px;
+  border-top: 1px solid #eef3f0;
+  color: #778580;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.contract-analysis-disclaimer {
   margin: 10px 0 0;
   padding-top: 9px;
   border-top: 1px solid #eef3f0;

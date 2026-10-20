@@ -34,6 +34,8 @@ const urlSignalDetails = document.querySelector("#url-signal-details");
 const contractAddressInput = document.querySelector("#contract-address");
 const ethereumAssessment = document.querySelector("#ethereum-assessment");
 const ethereumDetails = document.querySelector("#ethereum-details");
+const contractAnalysis = document.querySelector("#contract-analysis");
+const contractAnalysisDetails = document.querySelector("#contract-analysis-details");
 
 function setMessage(text, state = "") {
   message.textContent = text;
@@ -189,6 +191,7 @@ function displayResult(data) {
   displayThreatAssessment(data.threatAssessment);
   displayUrlSignals(data.urlSignals);
   displayEthereumAssessment(data.ethereumAssessment);
+  displayContractAnalysis(data.contractAnalysis);
   result.hidden = false;
 }
 
@@ -231,6 +234,134 @@ function displayEthereumAssessment(assessment) {
     row.className = "ethereum-detail";
     row.textContent = `${label}: ${value}`;
     ethereumDetails.append(row);
+  }
+}
+
+function displayContractAnalysis(analysis) {
+  contractAnalysisDetails.replaceChildren();
+  if (!analysis || typeof analysis !== "object") {
+    contractAnalysis.hidden = true;
+    return;
+  }
+
+  contractAnalysis.hidden = false;
+  const statusMessages = {
+    available: "Verified source was retrieved and analyzed.",
+    unverified: "Etherscan does not provide verified source for this address.",
+    unsupported_chain: "Source analysis currently supports Ethereum Mainnet only.",
+    unavailable: "Verified source analysis could not be completed.",
+    incomplete: "Only part of the contract source or proxy analysis was available."
+  };
+  const status = document.createElement("p");
+  status.className = "contract-analysis-status";
+  status.textContent = statusMessages[analysis.status] || statusMessages.unavailable;
+  contractAnalysisDetails.append(status);
+
+  const addDetail = (label, value) => {
+    if (typeof value !== "string" || value.trim() === "") {
+      return;
+    }
+    const detail = document.createElement("p");
+    detail.className = "contract-analysis-detail";
+    detail.textContent = `${label}: ${value}`;
+    contractAnalysisDetails.append(detail);
+  };
+
+  addDetail("Chain ID", analysis.chainId);
+  addDetail("Network", analysis.network);
+  if (typeof analysis.sourceVerified === "boolean") {
+    addDetail("Source verified", analysis.sourceVerified ? "Yes" : "No");
+  }
+  if (typeof analysis.contractName === "string") {
+    addDetail("Contract", analysis.contractName);
+  }
+  if (typeof analysis.message === "string") {
+    addDetail("Details", analysis.message);
+  }
+
+  const renderCapabilities = (headingText, capabilities) => {
+    if (!Array.isArray(capabilities)) {
+      return;
+    }
+    const heading = document.createElement("h3");
+    heading.className = "contract-analysis-subheading";
+    heading.textContent = headingText;
+    contractAnalysisDetails.append(heading);
+
+    for (const item of capabilities) {
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+      const card = document.createElement("div");
+      card.className = "contract-capability";
+      const title = document.createElement("p");
+      title.className = "contract-capability-title";
+      const capabilityStatus = ["detected", "not_detected", "unknown"].includes(item.status)
+        ? item.status.replace(/_/g, " ")
+        : "unknown";
+      title.textContent = `${typeof item.name === "string" ? item.name : "Capability"}: ${capabilityStatus}`;
+      card.append(title);
+      for (const [field, className] of [
+        ["explanation", "contract-capability-explanation"],
+        ["limitation", "contract-capability-limitation"]
+      ]) {
+        if (typeof item[field] === "string" && item[field].trim() !== "") {
+          const text = document.createElement("p");
+          text.className = className;
+          text.textContent = item[field].trim();
+          card.append(text);
+        }
+      }
+      if (Array.isArray(item.evidence)) {
+        for (const entry of item.evidence) {
+          if (typeof entry !== "string") {
+            continue;
+          }
+          const evidence = document.createElement("p");
+          evidence.className = "contract-capability-evidence";
+          evidence.textContent = `Evidence: ${entry}`;
+          card.append(evidence);
+        }
+      }
+      contractAnalysisDetails.append(card);
+    }
+  };
+
+  if (analysis.proxy && typeof analysis.proxy === "object") {
+    addDetail("Proxy", analysis.proxy.isProxy === true ? "Yes" : "No");
+    addDetail("Implementation address", analysis.proxy.implementationAddress);
+  }
+  if (
+    analysis.proxyAnalysis &&
+    typeof analysis.proxyAnalysis === "object"
+  ) {
+    renderCapabilities("Proxy source indicators", analysis.proxyAnalysis.capabilities);
+  }
+  if (analysis.implementationAnalysis && typeof analysis.implementationAnalysis === "object") {
+    addDetail("Implementation source", analysis.implementationAnalysis.status);
+    if (typeof analysis.implementationAnalysis.sourceVerified === "boolean") {
+      addDetail(
+        "Implementation source verified",
+        analysis.implementationAnalysis.sourceVerified ? "Yes" : "No"
+      );
+    } else if (analysis.implementationAnalysis.status === "available") {
+      addDetail("Implementation source verified", "Yes");
+    }
+    addDetail("Implementation contract", analysis.implementationAnalysis.contractName);
+    addDetail("Implementation address", analysis.implementationAnalysis.address);
+    if (
+      analysis.implementationAnalysis.proxy &&
+      typeof analysis.implementationAnalysis.proxy === "object"
+    ) {
+      addDetail(
+        "Next implementation address (not analyzed)",
+        analysis.implementationAnalysis.proxy.implementationAddress
+      );
+    }
+    renderCapabilities(
+      "Implementation source indicators",
+      analysis.implementationAnalysis.capabilities
+    );
   }
 }
 
@@ -383,6 +514,7 @@ button.addEventListener("click", async () => {
   threatAssessment.hidden = true;
   urlSignals.hidden = true;
   ethereumAssessment.hidden = true;
+  contractAnalysis.hidden = true;
   domainLabel.textContent = "";
   setMessage("Checking the active tab…");
 
