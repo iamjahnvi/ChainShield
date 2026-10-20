@@ -41,7 +41,13 @@ function buildThreatAssessment(result) {
     const error = result.reason;
     const reason =
       error instanceof SafeBrowsingError ? error.code : "provider_error";
-    console.error(`[investigations] Google Safe Browsing check unavailable (code=${reason})`);
+    const httpStatus =
+      error instanceof SafeBrowsingError && error.httpStatus !== undefined
+        ? `, httpStatus=${error.httpStatus}`
+        : "";
+    console.error(
+      `[investigations] Google Safe Browsing check unavailable (category=${reason}${httpStatus})`
+    );
     return {
       status: "unavailable",
       providers: [
@@ -49,13 +55,21 @@ function buildThreatAssessment(result) {
           id: "google_safe_browsing",
           name: "Google Safe Browsing",
           status: "unavailable",
-          reason
+          reason,
+          ...(error instanceof SafeBrowsingError && error.httpStatus !== undefined
+            ? { httpStatus: error.httpStatus }
+            : {})
         }
       ]
     };
   }
 
-  const matches = result.value;
+  const { httpStatus, matches } = result.value;
+  console.info(
+    `[investigations] Google Safe Browsing response (httpStatus=${httpStatus}, category=${
+      matches.length > 0 ? "match" : "no_match"
+    })`
+  );
   return {
     status: matches.length > 0 ? "reported" : "no_match",
     providers: [

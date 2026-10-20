@@ -191,7 +191,10 @@ function displayThreatAssessment(assessment) {
 
   if (!assessment || typeof assessment !== "object") {
     threatDetails.append(
-      createThreatMessage("Threat assessment unavailable: the server did not return a result.", "unavailable")
+      createThreatMessage(
+        "Threat assessment unavailable: the server response omitted this result. Restart the current backend and try again.",
+        "unavailable"
+      )
     );
     return;
   }

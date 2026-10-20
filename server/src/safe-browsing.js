@@ -6,10 +6,13 @@ const MAX_CACHE_ENTRIES = 500;
 const positiveCache = new Map();
 
 class SafeBrowsingError extends Error {
-  constructor(code, message) {
+  constructor(code, message, { httpStatus } = {}) {
     super(message);
     this.name = "SafeBrowsingError";
     this.code = code;
+    if (httpStatus !== undefined) {
+      this.httpStatus = httpStatus;
+    }
   }
 }
 
@@ -102,10 +105,13 @@ async function checkSafeBrowsing(submittedUrl, options = {}) {
   const cached = positiveCache.get(cacheKey);
   if (cached) {
     if (cached.expiresAt > Date.now()) {
-      return cached.matches.map(({ threatType, matchedUrl }) => ({
-        threatType,
-        matchedUrl
-      }));
+      return {
+        httpStatus: cached.httpStatus,
+        matches: cached.matches.map(({ threatType, matchedUrl }) => ({
+          threatType,
+          matchedUrl
+        }))
+      };
     }
     positiveCache.delete(cacheKey);
   }
@@ -116,9 +122,13 @@ async function checkSafeBrowsing(submittedUrl, options = {}) {
   const controller = new AbortController();
   let timer;
   const timeoutError = new SafeBrowsingError("timeout", "Safe Browsing lookup timed out.");
+  let responseStatus;
   const timeoutPromise = new Promise((resolve, reject) => {
     timer = setTimeout(() => {
       controller.abort();
+      if (responseStatus !== undefined) {
+        timeoutError.httpStatus = responseStatus;
+      }
       reject(timeoutError);
     }, timeoutMs);
   });
@@ -142,6 +152,7 @@ async function checkSafeBrowsing(submittedUrl, options = {}) {
           signal: controller.signal,
           redirect: "error"
         });
+        responseStatus = response && response.status;
       } catch {
         if (controller.signal.aborted) {
           throw timeoutError;
@@ -150,10 +161,16 @@ async function checkSafeBrowsing(submittedUrl, options = {}) {
       }
 
       if (!response || typeof response.ok !== "boolean") {
-        throw new SafeBrowsingError("bad_response", "Safe Browsing returned an unreadable response.");
+        throw new SafeBrowsingError(
+          "bad_response",
+          "Safe Browsing returned an unreadable response.",
+          { httpStatus: response && response.status }
+        );
       }
       if (!response.ok) {
-        throw new SafeBrowsingError("upstream", "Safe Browsing returned an error.");
+        throw new SafeBrowsingError("http_rejection", "Safe Browsing returned an error.", {
+          httpStatus: response.status
+        });
       }
 
       let payload;
@@ -163,10 +180,22 @@ async function checkSafeBrowsing(submittedUrl, options = {}) {
         if (controller.signal.aborted) {
           throw timeoutError;
         }
-        throw new SafeBrowsingError("bad_response", "Safe Browsing returned malformed JSON.");
+        throw new SafeBrowsingError(
+          "bad_response",
+          "Safe Browsing returned malformed JSON.",
+          { httpStatus: response.status }
+        );
       }
 
-      const normalizedMatches = normalizeMatches(payload);
+      let normalizedMatches;
+      try {
+        normalizedMatches = normalizeMatches(payload);
+      } catch (error) {
+        if (error instanceof SafeBrowsingError) {
+          error.httpStatus = response.status;
+        }
+        throw error;
+      }
       if (
         normalizedMatches.length > 0 &&
         normalizedMatches.every((match) => match.cacheDurationMs !== null)
@@ -179,13 +208,17 @@ async function checkSafeBrowsing(submittedUrl, options = {}) {
         }
         positiveCache.set(cacheKey, {
           expiresAt: Date.now() + cacheDurationMs,
-          matches: normalizedMatches
+          matches: normalizedMatches,
+          httpStatus: response.status
         });
       }
-      return normalizedMatches.map(({ threatType, matchedUrl }) => ({
-        threatType,
-        matchedUrl
-      }));
+      return {
+        httpStatus: response.status,
+        matches: normalizedMatches.map(({ threatType, matchedUrl }) => ({
+          threatType,
+          matchedUrl
+        }))
+      };
     })();
 
     return await Promise.race([requestPromise, timeoutPromise]);
