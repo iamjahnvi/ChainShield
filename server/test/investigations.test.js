@@ -137,6 +137,7 @@ test("valid investigation request returns validated TinyFish results", async () 
   assert.equal(body.threatAssessment.status, "no_match");
   assert.equal(body.threatAssessment.providers[0].id, "google_safe_browsing");
   assert.equal(body.threatAssessment.providers[0].scope, "submitted_url");
+  assert.deepEqual(body.urlSignals, { findings: [] });
   assert.match(body.summary, /do not establish whether the website is safe or malicious/i);
 
   assert.equal(body.evidence.length, 5);
@@ -271,6 +272,44 @@ test("Google Safe Browsing matches are returned separately from search evidence"
   ]);
 });
 
+test("URL heuristic findings remain separate from Safe Browsing statuses", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  const submittedUrl =
+    "https://user:never-return-this@192.0.2.99/private?token=also-never-return-this";
+
+  setSafeBrowsingFetch(async () =>
+    jsonResponse({
+      matches: [
+        {
+          threatType: "MALWARE",
+          threat: { url: "https://192.0.2.99/private" }
+        }
+      ]
+    })
+  );
+  const reported = await postInvestigation({ url: submittedUrl });
+  assert.equal(reported.body.threatAssessment.status, "reported");
+  assert.equal(reported.body.urlSignals.findings[0].ruleId, "ip_address_hostname");
+
+  setSafeBrowsingFetch(async () => jsonResponse({}));
+  const noMatch = await postInvestigation({ url: submittedUrl });
+  assert.equal(noMatch.body.threatAssessment.status, "no_match");
+  assert.equal(noMatch.body.urlSignals.findings[0].ruleId, "ip_address_hostname");
+
+  setSafeBrowsingFetch(async () => {
+    throw new Error("mock provider unavailable");
+  });
+  const unavailable = await postInvestigation({ url: submittedUrl });
+  assert.equal(unavailable.body.threatAssessment.status, "unavailable");
+  assert.equal(unavailable.body.urlSignals.findings[0].ruleId, "ip_address_hostname");
+
+  for (const result of [reported, noMatch, unavailable]) {
+    assert.equal(result.body.status, "no_results");
+    assert.ok(!JSON.stringify(result.body).includes("never-return-this"));
+    assert.ok(!JSON.stringify(result.body).includes("also-never-return-this"));
+  }
+});
+
 test("Google Safe Browsing positive results are cached for the returned duration", async () => {
   setSearchFetch(async () => jsonResponse({ results: [] }));
   let safeBrowsingCalls = 0;
@@ -308,6 +347,7 @@ test("Google Safe Browsing no-match response is not described as safe", async ()
   assert.equal(response.status, 200);
   assert.equal(body.threatAssessment.status, "no_match");
   assert.doesNotMatch(JSON.stringify(body.threatAssessment), /website is safe|clean/i);
+  assert.deepEqual(body.urlSignals, { findings: [] });
 });
 
 test("missing Google Safe Browsing key returns unavailable without calling provider", async () => {

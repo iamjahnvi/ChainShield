@@ -9,6 +9,7 @@ const {
   SafeBrowsingError,
   checkSafeBrowsing
 } = require("../safe-browsing");
+const { analyzeUrl } = require("../url-analysis");
 
 const router = express.Router();
 
@@ -147,6 +148,7 @@ router.post("/", async (req, res) => {
   }
 
   const domain = url.hostname;
+  const urlSignals = { findings: analyzeUrl(url) };
 
   try {
     const [searchResult, threatResult] = await Promise.allSettled([
@@ -170,7 +172,8 @@ router.post("/", async (req, res) => {
         evidence: [],
         investigationType: "web_search",
         demo: false,
-        threatAssessment
+        threatAssessment,
+        urlSignals
       });
     }
 
@@ -181,7 +184,8 @@ router.post("/", async (req, res) => {
       evidence,
       investigationType: "web_search",
       demo: false,
-      threatAssessment
+      threatAssessment,
+      urlSignals
     });
   } catch (error) {
     const isTinyFishError = error instanceof TinyFishError;
