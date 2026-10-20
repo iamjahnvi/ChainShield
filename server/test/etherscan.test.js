@@ -12,6 +12,9 @@ const IMPLEMENTATION = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
 const IMPLEMENTATION_TWO = "0x9876543210abcdef9876543210abcdef98765432";
 const IMPLEMENTATION_THREE = "0x1111111111111111111111111111111111111111";
 const IMPLEMENTATION_FOUR = "0x2222222222222222222222222222222222222222";
+const USDC_PROXY = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+const USDC_IMPLEMENTATION = "0x43506849d7c04f9138d1a2050bbf3a0c054402dd";
+const USDC_NEXT_IMPLEMENTATION = "0x800c32eaa2a6c93cf4cb51794450ed77fbfbb172";
 const API_KEY = "etherscan-test-key-must-never-leak";
 const ENV = { ETHERSCAN_API_KEY: API_KEY };
 
@@ -239,29 +242,39 @@ test("detects potential capabilities in verified source with explicit limitation
   assert.ok(capabilities[0].evidence.some((line) => line.includes("function mint")));
 });
 
-test("does not infer privileged minting from a function name or unrelated owner guard", () => {
+test("reports observed operation patterns without asserting effective privileges", () => {
   const capabilities = analyzeCapabilities([
     "contract Token {",
     "  function setFee(uint256 fee) external onlyOwner { }",
     "  function mint(address to, uint256 amount) external { _mint(to, amount); }",
     "}"
   ].join("\n"));
-  assert.equal(capabilities[0].status, "unknown");
+  assert.equal(capabilities[0].status, "detected");
+  assert.match(capabilities[0].limitation, /does not establish who can call it/i);
   assert.equal(capabilities[1].status, "not_detected");
   assert.equal(capabilities[4].status, "detected");
 });
 
-test("keeps multiline mint evidence unknown when the access guard is ambiguous", () => {
+test("detects multiline mint, pause, and blacklist patterns and preserves evidence context", () => {
   const capabilities = analyzeCapabilities([
     "contract Token {",
     "  function",
-    "    mint(address to)",
-    "    external onlyOwner",
+    "    mint(address to) external",
+    "    onlyOwner",
     "  { _mint(to, 1); }",
+    "  function pause() external",
+    "    onlyOwner",
+    "  { _pause(); }",
+    "  function blacklist(address account) external",
+    "    onlyOwner",
+    "  { blacklisted[account] = true; }",
     "}"
   ].join("\n"));
-  assert.equal(capabilities[0].status, "unknown");
-  assert.ok(capabilities[0].evidence[0].includes("_mint(to, 1)"));
+  assert.equal(capabilities[0].status, "detected");
+  assert.equal(capabilities[1].status, "detected");
+  assert.equal(capabilities[2].status, "detected");
+  assert.ok(capabilities[0].evidence[0].includes("onlyOwner"));
+  assert.match(capabilities[0].limitation, /does not establish who can call it/i);
 });
 
 test("ordinary verified source reports no matching indicators without a safety verdict", () => {
@@ -384,6 +397,65 @@ test("analyzes a proxy and its single implementation in separate layers", async 
   );
 });
 
+test("continues through a proxy implementation even when its source cannot be classified", async () => {
+  const chain = [USDC_PROXY, USDC_IMPLEMENTATION, USDC_NEXT_IMPLEMENTATION];
+  const calls = [];
+  const analysis = await analyzeContractSource(USDC_PROXY, "0x1", {
+    getVerifiedSource: async (address) => {
+      calls.push(address);
+      const index = calls.length - 1;
+      return {
+        verified: true,
+        source:
+          index === 1
+            ? '{"sources":{"FiatTokenV2_2.sol":{"content":false}}}'
+            : `contract Layer${index} {}`,
+        contractName: index === 1 ? "FiatTokenV2_2" : `Layer${index}`,
+        proxy: index < chain.length - 1,
+        implementationAddress: chain[index + 1] || null
+      };
+    }
+  });
+
+  assert.equal(analysis.status, "incomplete");
+  assert.equal(analysis.reason, "capability_analysis_incomplete");
+  assert.deepEqual(calls, chain);
+  assert.equal(analysis.layers.length, 3);
+  assert.deepEqual(
+    analysis.layers.map((layer) => layer.address),
+    chain
+  );
+  assert.equal(analysis.layers[1].status, "incomplete");
+  assert.ok(analysis.layers[1].capabilities.every((capability) => capability.status === "unknown"));
+  assert.equal(analysis.layers[2].status, "available");
+});
+
+test("reports the later source failure as the chain stopping reason", async () => {
+  let calls = 0;
+  const analysis = await analyzeContractSource(ADDRESS, "0x1", {
+    getVerifiedSource: async () => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          verified: true,
+          source: '{"sources":{"FiatTokenV2_2.sol":{"content":false}}}',
+          contractName: "UnparsedProxy",
+          proxy: true,
+          implementationAddress: IMPLEMENTATION
+        };
+      }
+      throw new EtherscanError("timeout", "sanitized timeout");
+    }
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(analysis.status, "incomplete");
+  assert.equal(analysis.reason, "timeout");
+  assert.equal(analysis.layers[0].reason, "capability_analysis_incomplete");
+  assert.equal(analysis.layers[1].reason, "timeout");
+  assert.match(analysis.message, /timed out/i);
+});
+
 test("analyzes nested proxy layers through the three-hop limit", async () => {
   const chain = [ADDRESS, IMPLEMENTATION, IMPLEMENTATION_TWO, IMPLEMENTATION_THREE];
   const calls = [];
@@ -404,14 +476,7 @@ test("analyzes nested proxy layers through the three-hop limit", async () => {
   assert.equal(analysis.status, "available");
   assert.deepEqual(calls, chain);
   assert.equal(analysis.layers.length, 4);
-  assert.deepEqual(
-    analysis.layers.map((layer) => layer.address),
-    chain
-  );
   assert.ok(analysis.layers.every((layer) => layer.sourceVerified === true));
-  assert.ok(
-    analysis.layers.every((layer) => layer.capabilities[1].status === "detected")
-  );
 });
 
 test("stops before fetching a fourth implementation hop and marks the chain incomplete", async () => {
@@ -442,7 +507,9 @@ test("stops before fetching a fourth implementation hop and marks the chain inco
   assert.equal(analysis.layers.length, 5);
   assert.equal(analysis.layers[4].address, IMPLEMENTATION_FOUR);
   assert.equal(analysis.layers[4].status, "hop_limit");
+  assert.equal(analysis.layers[4].reason, "hop_limit_exceeded");
   assert.equal(analysis.layers[4].sourceVerified, null);
+  assert.equal(analysis.reason, "hop_limit_exceeded");
   assert.match(analysis.message, /maximum of 3 implementation hops/);
 });
 
@@ -464,6 +531,7 @@ test("marks an unverified proxy implementation as incomplete", async () => {
   });
 
   assert.equal(analysis.status, "incomplete");
+  assert.equal(analysis.reason, "source_unverified");
   assert.equal(analysis.implementationAnalysis.status, "unverified");
 });
 
@@ -485,11 +553,12 @@ test("marks an unavailable proxy implementation source as incomplete", async () 
     }
   });
   assert.equal(analysis.status, "incomplete");
+  assert.equal(analysis.reason, "network");
   assert.equal(analysis.implementationAnalysis.status, "unavailable");
   assert.equal(calls, 2);
 });
 
-test("stops after one hop when the implementation is itself a proxy", async () => {
+test("detects a repeated address cycle after following implementation metadata", async () => {
   let calls = 0;
   const analysis = await analyzeContractSource(ADDRESS, "0x1", {
     getVerifiedSource: async () => {
@@ -505,6 +574,7 @@ test("stops after one hop when the implementation is itself a proxy", async () =
   });
   assert.equal(calls, 2);
   assert.equal(analysis.status, "incomplete");
+  assert.equal(analysis.reason, "cycle_detected");
   assert.deepEqual(
     analysis.layers.map((layer) => layer.status),
     ["available", "available", "cycle"]
@@ -528,10 +598,11 @@ test("marks invalid implementation metadata incomplete without requesting that a
     }
   });
   assert.equal(analysis.status, "incomplete");
+  assert.equal(analysis.reason, "invalid_implementation_address");
   assert.deepEqual(calls, [ADDRESS]);
   assert.equal(analysis.layers[0].status, "malformed");
   assert.equal(analysis.layers[0].implementationAddress, null);
-  assert.match(analysis.message, /malformed/i);
+  assert.match(analysis.message, /invalid implementation address/i);
   assert.ok(!JSON.stringify(analysis).includes("not-an-address"));
 });
 

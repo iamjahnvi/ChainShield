@@ -4,6 +4,27 @@ const ETHERSCAN_ENDPOINT = "https://api.etherscan.io/v2/api";
 const ETHERSCAN_CHAIN_ID = "1";
 const DEFAULT_TIMEOUT_MS = 6000;
 const DEFAULT_MAX_RESPONSE_BYTES = 1024 * 1024;
+const MAX_IMPLEMENTATION_HOPS = 3;
+const ANALYSIS_REASON_MESSAGES = {
+  config_missing: "Etherscan is not configured on the backend.",
+  timeout: "The Etherscan source lookup timed out.",
+  rate_limited: "Etherscan rate limit was reached.",
+  network: "Etherscan could not be reached.",
+  http_rejection: "Etherscan rejected the source lookup.",
+  api_error: "Etherscan could not complete the source lookup.",
+  response_too_large: "Etherscan's response exceeded the configured size limit.",
+  bad_response: "Etherscan returned malformed source data.",
+  provider_error: "The Etherscan source lookup failed.",
+  source_unverified: "An implementation layer is not verified on Etherscan.",
+  source_unavailable: "Etherscan could not retrieve source for an implementation layer.",
+  malformed_source_response: "Etherscan returned malformed source data for a layer.",
+  malformed_proxy_metadata: "Etherscan returned malformed proxy metadata for a layer.",
+  missing_implementation_address: "Etherscan marked a layer as a proxy but supplied no implementation address.",
+  invalid_implementation_address: "Etherscan supplied an invalid implementation address; it was not requested.",
+  cycle_detected: "A repeated implementation address was detected; traversal stopped to avoid a cycle.",
+  hop_limit_exceeded: `The implementation chain exceeds the maximum of ${MAX_IMPLEMENTATION_HOPS} implementation hops; remaining layers were not analyzed.`,
+  capability_analysis_incomplete: "Verified source was retrieved, but one or more capability indicators could not be classified."
+};
 
 class EtherscanError extends Error {
   constructor(code, message) {
@@ -309,21 +330,23 @@ function sourceLines(source) {
 }
 
 function matchingEvidence(lines, pattern) {
-  const matchingLines = [...new Set(lines.filter((line) => pattern.test(line)))];
-  if (matchingLines.length > 0) {
-    return matchingLines
-      .slice(0, 3)
-      .map((line) => (line.length > 180 ? `${line.slice(0, 177)}...` : line));
-  }
-
   const source = lines.join("\n");
-  const matchIndex = source.search(pattern);
-  if (matchIndex < 0) {
-    return [];
+  const matcher = new RegExp(pattern.source, `${pattern.flags.replace(/[gy]/g, "")}g`);
+  const evidence = [];
+  for (const match of source.matchAll(matcher)) {
+    const context = source
+      .slice(match.index, Math.min(source.length, match.index + match[0].length + 100))
+      .replace(/\s+/g, " ")
+      .trim();
+    const excerpt = context.length > 180 ? `${context.slice(0, 177)}...` : context;
+    if (!evidence.includes(excerpt)) {
+      evidence.push(excerpt);
+    }
+    if (evidence.length === 3) {
+      break;
+    }
   }
-  const lineIndex = source.slice(0, matchIndex).split("\n").length - 1;
-  const context = lines.slice(Math.max(0, lineIndex - 1), lineIndex + 3).join(" ");
-  return [context.length > 180 ? `${context.slice(0, 177)}...` : context];
+  return evidence;
 }
 
 function capability(name, status, evidence, explanation, limitation) {
@@ -397,18 +420,8 @@ function analyzeCapabilities(source, proxyDetected = false) {
     /\b(?:upgradeTo|upgradeToAndCall|_authorizeUpgrade)\s*\(|\bUUPSUpgradeable\b|\bTransparentUpgradeableProxy\b|\bERC1967(?:Proxy|Upgrade)\b/
   );
   const upgradeStatus = proxyDetected || upgradeEvidence.length > 0 ? "detected" : "not_detected";
-  const operationStatus = (evidence) => {
-    if (evidence.length === 0) {
-      return "not_detected";
-    }
-    return evidence.some((line) =>
-      /\bonlyOwner\b|\bonlyRole\s*\(|\bhasRole\s*\(|\b_checkRole\s*\(|\brequire\s*\(\s*msg\.sender/i.test(
-        line
-      )
-    )
-      ? "detected"
-      : "unknown";
-  };
+  const operationStatus = (evidence) =>
+    evidence.length > 0 ? "detected" : "not_detected";
 
   return [
     capability(
@@ -469,7 +482,6 @@ async function analyzeContractSource(address, chainId, options = {}) {
   }
 
   const getSource = options.getVerifiedSource || getVerifiedSource;
-  const maxImplementationHops = 3;
   const layers = [];
   const visited = new Set();
   let nextAddress = address.toLowerCase();
@@ -484,6 +496,7 @@ async function analyzeContractSource(address, chainId, options = {}) {
         proxyStatus: "unknown",
         sourceVerified: null,
         status: "cycle",
+        reason: "cycle_detected",
         capabilities: []
       });
       break;
@@ -504,6 +517,7 @@ async function analyzeContractSource(address, chainId, options = {}) {
         proxyStatus: "unknown",
         sourceVerified: null,
         status: reason === "bad_response" ? "malformed" : "unavailable",
+        reason,
         capabilities: []
       });
       break;
@@ -523,6 +537,7 @@ async function analyzeContractSource(address, chainId, options = {}) {
         proxyStatus: "unknown",
         sourceVerified: null,
         status: "malformed",
+        reason: "malformed_source_response",
         capabilities: []
       });
       break;
@@ -534,6 +549,7 @@ async function analyzeContractSource(address, chainId, options = {}) {
         proxyStatus: "unknown",
         sourceVerified: false,
         status: "unverified",
+        reason: "source_unverified",
         capabilities: []
       });
       break;
@@ -548,6 +564,11 @@ async function analyzeContractSource(address, chainId, options = {}) {
       sourceRecord.invalidProxyMetadata === true ||
       sourceRecord.invalidImplementationAddress === true
     ) {
+      const invalidImplementationAddress =
+        sourceRecord.invalidImplementationAddress === true ||
+        (sourceRecord.implementationAddress !== null &&
+          sourceRecord.implementationAddress !== undefined &&
+          !validateContractAddress(sourceRecord.implementationAddress));
       layers.push({
         address: normalizedAddress,
         proxyStatus:
@@ -558,6 +579,9 @@ async function analyzeContractSource(address, chainId, options = {}) {
               : "unknown",
         sourceVerified: true,
         status: "malformed",
+        reason: invalidImplementationAddress
+          ? "invalid_implementation_address"
+          : "malformed_proxy_metadata",
         implementationAddress: null,
         contractName:
           typeof sourceRecord.contractName === "string"
@@ -582,26 +606,28 @@ async function analyzeContractSource(address, chainId, options = {}) {
       status: capabilities.some((item) => item.status === "unknown")
         ? "incomplete"
         : "available",
+      reason: capabilities.some((item) => item.status === "unknown")
+        ? "capability_analysis_incomplete"
+        : null,
       contractName: sourceRecord.contractName || "",
       implementationAddress: sourceRecord.implementationAddress || null,
       capabilities
     };
     layers.push(layer);
 
-    if (layer.status === "incomplete") {
-      break;
-    }
     if (!sourceRecord.proxy) {
       break;
     }
     if (!sourceRecord.implementationAddress) {
       layer.status = "malformed";
+      layer.reason = "missing_implementation_address";
       break;
     }
 
     const implementationAddress = sourceRecord.implementationAddress.toLowerCase();
     if (!validateContractAddress(implementationAddress)) {
       layer.status = "malformed";
+      layer.reason = "invalid_implementation_address";
       break;
     }
     if (visited.has(implementationAddress)) {
@@ -610,16 +636,18 @@ async function analyzeContractSource(address, chainId, options = {}) {
         proxyStatus: "unknown",
         sourceVerified: null,
         status: "cycle",
+        reason: "cycle_detected",
         capabilities: []
       });
       break;
     }
-    if (hops >= maxImplementationHops) {
+    if (hops >= MAX_IMPLEMENTATION_HOPS) {
       layers.push({
         address: implementationAddress,
         proxyStatus: "not_checked",
         sourceVerified: null,
         status: "hop_limit",
+        reason: "hop_limit_exceeded",
         capabilities: []
       });
       break;
@@ -642,15 +670,15 @@ async function analyzeContractSource(address, chainId, options = {}) {
                 proxyStatus: "unknown",
                 sourceVerified: null,
                 status: "malformed",
+                reason: "malformed_source_response",
                 capabilities: []
               }
             ]
           }
         : {}),
       message:
-        initialFailure === "bad_response"
-          ? "Etherscan returned malformed source data for the submitted contract."
-          : "Verified contract source could not be retrieved."
+        ANALYSIS_REASON_MESSAGES[initialFailure] ||
+        "Verified contract source could not be retrieved."
     };
   }
 
@@ -660,25 +688,20 @@ async function analyzeContractSource(address, chainId, options = {}) {
       status: "unverified",
       chainId,
       network: "Ethereum Mainnet",
+      reason: "source_unverified",
       sourceVerified: false,
       layers,
       message: "Etherscan does not provide verified source for the submitted contract."
     };
   }
 
-  const limitationMessages = {
-    unverified: "An implementation layer is not verified on Etherscan.",
-    unavailable: "Etherscan could not retrieve source for an implementation layer.",
-    malformed: "Etherscan returned malformed source or proxy metadata for a layer.",
-    cycle: "A repeated implementation address was detected; traversal stopped to avoid a cycle.",
-    hop_limit: `The implementation chain exceeds the maximum of ${maxImplementationHops} implementation hops; remaining layers were not analyzed.`,
-    incomplete: "Verified source for a layer could not be fully analyzed."
-  };
-  const incompleteLayer = layers.find((layer) => layer.status !== "available");
+  const incompleteLayers = layers.filter((layer) => layer.status !== "available");
+  const incompleteLayer = incompleteLayers[incompleteLayers.length - 1];
   const status = incompleteLayer ? "incomplete" : "available";
   const firstImplementation = layers[1];
   const response = {
     status,
+    ...(incompleteLayer ? { reason: incompleteLayer.reason } : {}),
     chainId,
     network: "Ethereum Mainnet",
     sourceVerified: firstLayer.sourceVerified === true,
@@ -706,7 +729,7 @@ async function analyzeContractSource(address, chainId, options = {}) {
 
   if (incompleteLayer) {
     response.message =
-      limitationMessages[incompleteLayer.status] ||
+      ANALYSIS_REASON_MESSAGES[incompleteLayer.reason] ||
       "The implementation chain could not be fully analyzed.";
   }
   return response;
@@ -717,6 +740,7 @@ module.exports = {
   DEFAULT_TIMEOUT_MS,
   ETHERSCAN_CHAIN_ID,
   ETHERSCAN_ENDPOINT,
+  MAX_IMPLEMENTATION_HOPS,
   EtherscanError,
   analyzeCapabilities,
   analyzeContractSource,
