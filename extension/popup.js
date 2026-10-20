@@ -327,41 +327,79 @@ function displayContractAnalysis(analysis) {
     }
   };
 
-  if (analysis.proxy && typeof analysis.proxy === "object") {
-    addDetail("Proxy", analysis.proxy.isProxy === true ? "Yes" : "No");
-    addDetail("Implementation address", analysis.proxy.implementationAddress);
-  }
-  if (
-    analysis.proxyAnalysis &&
-    typeof analysis.proxyAnalysis === "object"
-  ) {
-    renderCapabilities("Proxy source indicators", analysis.proxyAnalysis.capabilities);
-  }
-  if (analysis.implementationAnalysis && typeof analysis.implementationAnalysis === "object") {
-    addDetail("Implementation source", analysis.implementationAnalysis.status);
-    if (typeof analysis.implementationAnalysis.sourceVerified === "boolean") {
+  if (Array.isArray(analysis.layers)) {
+    for (const [index, layer] of analysis.layers.entries()) {
+      if (!layer || typeof layer !== "object") {
+        continue;
+      }
+      const layerHeading = document.createElement("h3");
+      layerHeading.className = "contract-analysis-subheading";
+      layerHeading.textContent =
+        index === 0 ? "Submitted contract" : `Implementation layer ${index}`;
+      contractAnalysisDetails.append(layerHeading);
+      addDetail("Contract address", layer.address);
+      const proxyLabel = {
+        proxy: "Yes",
+        not_proxy: "No",
+        not_checked: "Not checked",
+        unknown: "Unknown"
+      }[layer.proxyStatus] || "Unknown";
+      addDetail("Proxy", proxyLabel);
+      addDetail(
+        "Source verified",
+        layer.sourceVerified === true
+          ? "Yes"
+          : layer.sourceVerified === false
+            ? "No"
+            : "Not retrieved"
+      );
+      const layerStatusMessages = {
+        available: "Analyzed",
+        incomplete: "Partially analyzed",
+        unverified: "Source not verified",
+        unavailable: "Source unavailable",
+        malformed: "Malformed source or proxy metadata",
+        cycle: "Repeated address; cycle detected",
+        hop_limit: "Not analyzed; maximum proxy depth reached"
+      };
+      addDetail(
+        "Layer status",
+        layerStatusMessages[layer.status] || "Not analyzed"
+      );
+      addDetail("Contract", layer.contractName);
+      if (typeof layer.implementationAddress === "string") {
+        addDetail("Next implementation address", layer.implementationAddress);
+      }
+      renderCapabilities(`Layer ${index} capability indicators`, layer.capabilities);
+    }
+  } else {
+    if (analysis.proxy && typeof analysis.proxy === "object") {
+      addDetail("Proxy", analysis.proxy.isProxy === true ? "Yes" : "No");
+      addDetail("Implementation address", analysis.proxy.implementationAddress);
+    }
+    if (analysis.proxyAnalysis && typeof analysis.proxyAnalysis === "object") {
+      renderCapabilities("Proxy source indicators", analysis.proxyAnalysis.capabilities);
+    }
+    if (
+      analysis.implementationAnalysis &&
+      typeof analysis.implementationAnalysis === "object"
+    ) {
+      addDetail("Implementation source", analysis.implementationAnalysis.status);
       addDetail(
         "Implementation source verified",
-        analysis.implementationAnalysis.sourceVerified ? "Yes" : "No"
+        analysis.implementationAnalysis.sourceVerified === true
+          ? "Yes"
+          : analysis.implementationAnalysis.sourceVerified === false
+            ? "No"
+            : "Not retrieved"
       );
-    } else if (analysis.implementationAnalysis.status === "available") {
-      addDetail("Implementation source verified", "Yes");
-    }
-    addDetail("Implementation contract", analysis.implementationAnalysis.contractName);
-    addDetail("Implementation address", analysis.implementationAnalysis.address);
-    if (
-      analysis.implementationAnalysis.proxy &&
-      typeof analysis.implementationAnalysis.proxy === "object"
-    ) {
-      addDetail(
-        "Next implementation address (not analyzed)",
-        analysis.implementationAnalysis.proxy.implementationAddress
+      addDetail("Implementation contract", analysis.implementationAnalysis.contractName);
+      addDetail("Implementation address", analysis.implementationAnalysis.address);
+      renderCapabilities(
+        "Implementation source indicators",
+        analysis.implementationAnalysis.capabilities
       );
     }
-    renderCapabilities(
-      "Implementation source indicators",
-      analysis.implementationAnalysis.capabilities
-    );
   }
 }
 

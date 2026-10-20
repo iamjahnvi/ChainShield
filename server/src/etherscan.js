@@ -123,12 +123,14 @@ function parseSourceRecord(payload) {
     return { verified: false };
   }
 
-  const isProxy = record.Proxy === "1" || record.Proxy === "2";
-  const implementationAddress =
-    record.Implementation.trim() === "" ? null : record.Implementation.trim();
-  if (implementationAddress && !validateContractAddress(implementationAddress)) {
-    throw new EtherscanError("bad_response", "Etherscan returned an invalid implementation address.");
-  }
+  const implementationValue = record.Implementation.trim();
+  const implementationAddress = validateContractAddress(implementationValue)
+    ? implementationValue.toLowerCase()
+    : null;
+  const isProxy =
+    record.Proxy === "1" ||
+    record.Proxy === "2" ||
+    implementationValue !== "";
 
   return {
     verified: true,
@@ -136,7 +138,10 @@ function parseSourceRecord(payload) {
     contractName:
       typeof record.ContractName === "string" ? record.ContractName.slice(0, 120) : "",
     proxy: isProxy || implementationAddress !== null,
-    implementationAddress
+    implementationAddress,
+    invalidImplementationAddress:
+      implementationValue !== "" && implementationAddress === null,
+    invalidProxyMetadata: !["0", "1", "2"].includes(record.Proxy)
   };
 }
 
@@ -464,135 +469,247 @@ async function analyzeContractSource(address, chainId, options = {}) {
   }
 
   const getSource = options.getVerifiedSource || getVerifiedSource;
-  let proxyRecord;
-  try {
-    proxyRecord = await getSource(address, options);
-  } catch (error) {
-    const reason = error instanceof EtherscanError ? error.code : "provider_error";
+  const maxImplementationHops = 3;
+  const layers = [];
+  const visited = new Set();
+  let nextAddress = address.toLowerCase();
+  let hops = 0;
+  let initialFailure;
+
+  while (nextAddress) {
+    const normalizedAddress = nextAddress.toLowerCase();
+    if (visited.has(normalizedAddress)) {
+      layers.push({
+        address: normalizedAddress,
+        proxyStatus: "unknown",
+        sourceVerified: null,
+        status: "cycle",
+        capabilities: []
+      });
+      break;
+    }
+    visited.add(normalizedAddress);
+
+    let sourceRecord;
+    try {
+      sourceRecord = await getSource(normalizedAddress, options);
+    } catch (error) {
+      const reason = error instanceof EtherscanError ? error.code : "provider_error";
+      if (layers.length === 0) {
+        initialFailure = reason;
+        break;
+      }
+      layers.push({
+        address: normalizedAddress,
+        proxyStatus: "unknown",
+        sourceVerified: null,
+        status: reason === "bad_response" ? "malformed" : "unavailable",
+        capabilities: []
+      });
+      break;
+    }
+
+    if (
+      !sourceRecord ||
+      typeof sourceRecord !== "object" ||
+      typeof sourceRecord.verified !== "boolean"
+    ) {
+      if (layers.length === 0) {
+        initialFailure = "bad_response";
+        break;
+      }
+      layers.push({
+        address: normalizedAddress,
+        proxyStatus: "unknown",
+        sourceVerified: null,
+        status: "malformed",
+        capabilities: []
+      });
+      break;
+    }
+
+    if (sourceRecord.verified === false) {
+      layers.push({
+        address: normalizedAddress,
+        proxyStatus: "unknown",
+        sourceVerified: false,
+        status: "unverified",
+        capabilities: []
+      });
+      break;
+    }
+
+    if (
+      typeof sourceRecord.source !== "string" ||
+      typeof sourceRecord.proxy !== "boolean" ||
+      (sourceRecord.implementationAddress !== null &&
+        sourceRecord.implementationAddress !== undefined &&
+        !validateContractAddress(sourceRecord.implementationAddress)) ||
+      sourceRecord.invalidProxyMetadata === true ||
+      sourceRecord.invalidImplementationAddress === true
+    ) {
+      layers.push({
+        address: normalizedAddress,
+        proxyStatus:
+          sourceRecord.invalidProxyMetadata === true
+            ? "unknown"
+            : sourceRecord.proxy === true
+              ? "proxy"
+              : "unknown",
+        sourceVerified: true,
+        status: "malformed",
+        implementationAddress: null,
+        contractName:
+          typeof sourceRecord.contractName === "string"
+            ? sourceRecord.contractName.slice(0, 120)
+            : "",
+        capabilities:
+          typeof sourceRecord.source === "string"
+            ? analyzeCapabilities(sourceRecord.source, sourceRecord.proxy === true)
+            : unknownCapabilities()
+      });
+      break;
+    }
+
+    const capabilities = analyzeCapabilities(
+      sourceRecord.source,
+      sourceRecord.proxy
+    );
+    const layer = {
+      address: normalizedAddress,
+      proxyStatus: sourceRecord.proxy ? "proxy" : "not_proxy",
+      sourceVerified: true,
+      status: capabilities.some((item) => item.status === "unknown")
+        ? "incomplete"
+        : "available",
+      contractName: sourceRecord.contractName || "",
+      implementationAddress: sourceRecord.implementationAddress || null,
+      capabilities
+    };
+    layers.push(layer);
+
+    if (layer.status === "incomplete") {
+      break;
+    }
+    if (!sourceRecord.proxy) {
+      break;
+    }
+    if (!sourceRecord.implementationAddress) {
+      layer.status = "malformed";
+      break;
+    }
+
+    const implementationAddress = sourceRecord.implementationAddress.toLowerCase();
+    if (!validateContractAddress(implementationAddress)) {
+      layer.status = "malformed";
+      break;
+    }
+    if (visited.has(implementationAddress)) {
+      layers.push({
+        address: implementationAddress,
+        proxyStatus: "unknown",
+        sourceVerified: null,
+        status: "cycle",
+        capabilities: []
+      });
+      break;
+    }
+    if (hops >= maxImplementationHops) {
+      layers.push({
+        address: implementationAddress,
+        proxyStatus: "not_checked",
+        sourceVerified: null,
+        status: "hop_limit",
+        capabilities: []
+      });
+      break;
+    }
+
+    hops += 1;
+    nextAddress = implementationAddress;
+  }
+
+  if (initialFailure) {
     return {
-      status: "unavailable",
+      status: initialFailure === "bad_response" ? "incomplete" : "unavailable",
       chainId,
-      reason,
-      message: "Verified contract source could not be retrieved."
+      reason: initialFailure,
+      ...(initialFailure === "bad_response"
+        ? {
+            layers: [
+              {
+                address: address.toLowerCase(),
+                proxyStatus: "unknown",
+                sourceVerified: null,
+                status: "malformed",
+                capabilities: []
+              }
+            ]
+          }
+        : {}),
+      message:
+        initialFailure === "bad_response"
+          ? "Etherscan returned malformed source data for the submitted contract."
+          : "Verified contract source could not be retrieved."
     };
   }
 
-  if (!proxyRecord.verified) {
+  const firstLayer = layers[0];
+  if (!firstLayer || firstLayer.status === "unverified") {
     return {
       status: "unverified",
       chainId,
+      network: "Ethereum Mainnet",
       sourceVerified: false,
-      message: "Etherscan does not provide verified source for this address."
+      layers,
+      message: "Etherscan does not provide verified source for the submitted contract."
     };
   }
 
-  const proxyCapabilities = analyzeCapabilities(proxyRecord.source, proxyRecord.proxy);
-  if (proxyCapabilities.some((item) => item.status === "unknown")) {
-    return {
-      status: "incomplete",
-      chainId,
-      sourceVerified: true,
-      proxy: {
-        isProxy: proxyRecord.proxy,
-        implementationAddress: proxyRecord.implementationAddress
-      },
-      proxyAnalysis: { capabilities: proxyCapabilities },
-      message: "Verified source was returned in a format the analyzer could not fully parse."
-    };
-  }
-
+  const limitationMessages = {
+    unverified: "An implementation layer is not verified on Etherscan.",
+    unavailable: "Etherscan could not retrieve source for an implementation layer.",
+    malformed: "Etherscan returned malformed source or proxy metadata for a layer.",
+    cycle: "A repeated implementation address was detected; traversal stopped to avoid a cycle.",
+    hop_limit: `The implementation chain exceeds the maximum of ${maxImplementationHops} implementation hops; remaining layers were not analyzed.`,
+    incomplete: "Verified source for a layer could not be fully analyzed."
+  };
+  const incompleteLayer = layers.find((layer) => layer.status !== "available");
+  const status = incompleteLayer ? "incomplete" : "available";
+  const firstImplementation = layers[1];
   const response = {
-    status: "available",
+    status,
     chainId,
     network: "Ethereum Mainnet",
-    sourceVerified: true,
-    contractName: proxyRecord.contractName,
+    sourceVerified: firstLayer.sourceVerified === true,
+    contractName: firstLayer.contractName || "",
     proxy: {
-      isProxy: proxyRecord.proxy,
-      implementationAddress: proxyRecord.implementationAddress
+      isProxy: firstLayer.proxyStatus === "proxy",
+      implementationAddress: firstLayer.implementationAddress || null
     },
-    proxyAnalysis: { capabilities: proxyCapabilities }
-  };
-
-  if (!proxyRecord.proxy) {
-    return response;
-  }
-
-  if (!proxyRecord.implementationAddress) {
-    return {
-      ...response,
-      status: "incomplete",
-      message: "The contract is identified as a proxy, but no valid implementation address was provided."
-    };
-  }
-
-  let implementation;
-  try {
-    implementation = await getSource(proxyRecord.implementationAddress, options);
-  } catch {
-    return {
-      ...response,
-      status: "incomplete",
-      implementationAnalysis: {
-        address: proxyRecord.implementationAddress,
-        status: "unavailable"
-      },
-      message: "Proxy source was analysed, but implementation source could not be retrieved."
-    };
-  }
-
-  if (!implementation.verified) {
-    return {
-      ...response,
-      status: "incomplete",
-      implementationAnalysis: {
-        address: proxyRecord.implementationAddress,
-        status: "unverified"
-      },
-      message: "Proxy source was analysed, but implementation source is not verified on Etherscan."
-    };
-  }
-
-  if (implementation.proxy) {
-    return {
-      ...response,
-      status: "incomplete",
-      implementationAnalysis: {
-        address: proxyRecord.implementationAddress,
-        status: "proxy",
-        sourceVerified: true,
-        proxy: {
-          isProxy: true,
-          implementationAddress: implementation.implementationAddress
+    proxyAnalysis: { capabilities: firstLayer.capabilities || [] },
+    layers,
+    ...(firstImplementation
+      ? {
+          implementationAnalysis: {
+            address: firstImplementation.address,
+            status: firstImplementation.status,
+            sourceVerified: firstImplementation.sourceVerified,
+            proxyStatus: firstImplementation.proxyStatus,
+            contractName: firstImplementation.contractName || "",
+            implementationAddress: firstImplementation.implementationAddress || null,
+            capabilities: firstImplementation.capabilities || []
+          }
         }
-      },
-      message: "The implementation address is itself identified as a proxy. Analysis stopped after one implementation hop."
-    };
-  }
-
-  const implementationCapabilities = analyzeCapabilities(implementation.source, false);
-  if (implementationCapabilities.some((item) => item.status === "unknown")) {
-    return {
-      ...response,
-      status: "incomplete",
-      implementationAnalysis: {
-        address: proxyRecord.implementationAddress,
-        status: "unavailable",
-        capabilities: implementationCapabilities
-      },
-      message: "Proxy source was analysed, but implementation source could not be parsed."
-    };
-  }
-
-  return {
-    ...response,
-    implementationAnalysis: {
-      address: proxyRecord.implementationAddress,
-      status: "available",
-      contractName: implementation.contractName,
-      capabilities: implementationCapabilities
-    }
+      : {})
   };
+
+  if (incompleteLayer) {
+    response.message =
+      limitationMessages[incompleteLayer.status] ||
+      "The implementation chain could not be fully analyzed.";
+  }
+  return response;
 }
 
 module.exports = {

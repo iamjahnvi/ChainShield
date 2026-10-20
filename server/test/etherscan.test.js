@@ -9,6 +9,9 @@ const {
 
 const ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
 const IMPLEMENTATION = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+const IMPLEMENTATION_TWO = "0x9876543210abcdef9876543210abcdef98765432";
+const IMPLEMENTATION_THREE = "0x1111111111111111111111111111111111111111";
+const IMPLEMENTATION_FOUR = "0x2222222222222222222222222222222222222222";
 const API_KEY = "etherscan-test-key-must-never-leak";
 const ENV = { ETHERSCAN_API_KEY: API_KEY };
 
@@ -82,6 +85,23 @@ test("recognizes an unverified contract response", async () => {
       apiResponse("Contract source code not verified", "0", "NOTOK")
   });
   assert.deepEqual(result, { verified: false });
+});
+
+test("retains malformed implementation metadata without treating it as an address", async () => {
+  const result = await getVerifiedSource(ADDRESS, {
+    env: ENV,
+    fetchImpl: async () =>
+      apiResponse(
+        sourceRecord("contract Proxy {}", {
+          Proxy: "1",
+          Implementation: "malformed-address-value"
+        })
+      )
+  });
+  assert.equal(result.verified, true);
+  assert.equal(result.proxy, true);
+  assert.equal(result.implementationAddress, null);
+  assert.equal(result.invalidImplementationAddress, true);
 });
 
 test("classifies Etherscan API errors and rate limits without exposing provider text", async (t) => {
@@ -308,7 +328,7 @@ test("does not assume Mainnet when the RPC chain is unavailable or unsupported",
   );
 });
 
-test("analyzes proxy and implementation source separately with a single implementation hop", async () => {
+test("analyzes a proxy and its single implementation in separate layers", async () => {
   const lookupAddresses = [];
   const analysis = await analyzeContractSource(ADDRESS, "0x1", {
     getVerifiedSource: async (address) => {
@@ -337,8 +357,93 @@ test("analyzes proxy and implementation source separately with a single implemen
   assert.equal(analysis.proxy.isProxy, true);
   assert.equal(analysis.proxyAnalysis.capabilities[3].status, "detected");
   assert.equal(analysis.implementationAnalysis.address, IMPLEMENTATION);
+  assert.equal(analysis.implementationAnalysis.proxyStatus, "not_proxy");
   assert.equal(analysis.implementationAnalysis.capabilities[1].status, "detected");
   assert.equal(analysis.implementationAnalysis.capabilities[3].status, "not_detected");
+  assert.deepEqual(
+    analysis.layers.map(({ address, status, proxyStatus, sourceVerified }) => ({
+      address,
+      status,
+      proxyStatus,
+      sourceVerified
+    })),
+    [
+      {
+        address: ADDRESS,
+        status: "available",
+        proxyStatus: "proxy",
+        sourceVerified: true
+      },
+      {
+        address: IMPLEMENTATION,
+        status: "available",
+        proxyStatus: "not_proxy",
+        sourceVerified: true
+      }
+    ]
+  );
+});
+
+test("analyzes nested proxy layers through the three-hop limit", async () => {
+  const chain = [ADDRESS, IMPLEMENTATION, IMPLEMENTATION_TWO, IMPLEMENTATION_THREE];
+  const calls = [];
+  const analysis = await analyzeContractSource(ADDRESS, "0x1", {
+    getVerifiedSource: async (address) => {
+      calls.push(address);
+      const index = chain.indexOf(address);
+      return {
+        verified: true,
+        source: `contract Layer${index} { function pause() external onlyOwner { _pause(); } }`,
+        contractName: `Layer${index}`,
+        proxy: index < chain.length - 1,
+        implementationAddress: chain[index + 1] || null
+      };
+    }
+  });
+
+  assert.equal(analysis.status, "available");
+  assert.deepEqual(calls, chain);
+  assert.equal(analysis.layers.length, 4);
+  assert.deepEqual(
+    analysis.layers.map((layer) => layer.address),
+    chain
+  );
+  assert.ok(analysis.layers.every((layer) => layer.sourceVerified === true));
+  assert.ok(
+    analysis.layers.every((layer) => layer.capabilities[1].status === "detected")
+  );
+});
+
+test("stops before fetching a fourth implementation hop and marks the chain incomplete", async () => {
+  const chain = [
+    ADDRESS,
+    IMPLEMENTATION,
+    IMPLEMENTATION_TWO,
+    IMPLEMENTATION_THREE,
+    IMPLEMENTATION_FOUR
+  ];
+  const calls = [];
+  const analysis = await analyzeContractSource(ADDRESS, "0x1", {
+    getVerifiedSource: async (address) => {
+      calls.push(address);
+      const index = chain.indexOf(address);
+      return {
+        verified: true,
+        source: `contract Layer${index} {}`,
+        contractName: `Layer${index}`,
+        proxy: true,
+        implementationAddress: chain[index + 1] || null
+      };
+    }
+  });
+
+  assert.equal(analysis.status, "incomplete");
+  assert.deepEqual(calls, chain.slice(0, 4));
+  assert.equal(analysis.layers.length, 5);
+  assert.equal(analysis.layers[4].address, IMPLEMENTATION_FOUR);
+  assert.equal(analysis.layers[4].status, "hop_limit");
+  assert.equal(analysis.layers[4].sourceVerified, null);
+  assert.match(analysis.message, /maximum of 3 implementation hops/);
 });
 
 test("marks an unverified proxy implementation as incomplete", async () => {
@@ -400,7 +505,34 @@ test("stops after one hop when the implementation is itself a proxy", async () =
   });
   assert.equal(calls, 2);
   assert.equal(analysis.status, "incomplete");
-  assert.equal(analysis.implementationAnalysis.status, "proxy");
+  assert.deepEqual(
+    analysis.layers.map((layer) => layer.status),
+    ["available", "available", "cycle"]
+  );
+  assert.equal(analysis.layers[2].address, ADDRESS);
+  assert.match(analysis.message, /cycle/i);
+});
+
+test("marks invalid implementation metadata incomplete without requesting that address", async () => {
+  const calls = [];
+  const analysis = await analyzeContractSource(ADDRESS, "0x1", {
+    getVerifiedSource: async (address) => {
+      calls.push(address);
+      return {
+        verified: true,
+        source: "contract Proxy {}",
+        contractName: "Proxy",
+        proxy: true,
+        implementationAddress: "not-an-address"
+      };
+    }
+  });
+  assert.equal(analysis.status, "incomplete");
+  assert.deepEqual(calls, [ADDRESS]);
+  assert.equal(analysis.layers[0].status, "malformed");
+  assert.equal(analysis.layers[0].implementationAddress, null);
+  assert.match(analysis.message, /malformed/i);
+  assert.ok(!JSON.stringify(analysis).includes("not-an-address"));
 });
 
 test("returns unverified and unavailable states without exposing provider details", async () => {
@@ -417,4 +549,17 @@ test("returns unverified and unavailable states without exposing provider detail
   });
   assert.equal(unavailable.status, "unavailable");
   assert.ok(!JSON.stringify(unavailable).includes(API_KEY));
+});
+
+test("marks malformed root source data incomplete", async () => {
+  const analysis = await analyzeContractSource(ADDRESS, "0x1", {
+    getVerifiedSource: async () => {
+      throw new EtherscanError("bad_response", "sanitized malformed response");
+    }
+  });
+  assert.equal(analysis.status, "incomplete");
+  assert.equal(analysis.layers[0].address, ADDRESS);
+  assert.equal(analysis.layers[0].status, "malformed");
+  assert.equal(analysis.layers[0].sourceVerified, null);
+  assert.match(analysis.message, /malformed source data/);
 });
