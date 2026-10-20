@@ -19,6 +19,141 @@ const GROUP_DEFINITIONS = [
   }
 ];
 
+// --- Onboarding state ---
+let currentStep = 1;
+const totalSteps = 4;
+
+// DOM elements
+const onboarding = document.getElementById('onboarding');
+const steps = document.querySelectorAll('.onboarding-step');
+const progressSteps = document.querySelectorAll('.progress-step');
+const investigateCTA = document.getElementById('investigate-cta');
+const investigateButton = document.getElementById('investigate-button');
+
+// Show a specific step by number
+function showStep(stepNumber) {
+  if (stepNumber < 1 || stepNumber > totalSteps) return;
+
+  currentStep = stepNumber;
+
+  // Hide all steps
+  steps.forEach(step => {
+    step.classList.remove('active');
+    step.setAttribute('aria-hidden', 'true');
+  });
+
+  // Show the target step
+  const targetStep = document.getElementById(`step-${stepNumber}`);
+  if (targetStep) {
+    targetStep.classList.add('active');
+    targetStep.removeAttribute('aria-hidden');
+  }
+
+  // Update progress indicator
+  progressSteps.forEach((step, index) => {
+    if (index + 1 === stepNumber) {
+      step.classList.add('active');
+      step.classList.remove('done');
+    } else if (index < stepNumber - 1) {
+      step.classList.add('done');
+      step.classList.remove('active');
+    } else {
+      step.classList.remove('done');
+      step.classList.remove('active');
+    }
+  });
+
+  // Update navigation button states
+  // Step 1: Back disabled, show Next
+  // Step 4: Show "Review" and "Open ChainShield", hide Next
+  const backBtn = document.querySelector('.step-nav-button[data-step="1"]');
+  const nextBtn = document.querySelector('.step-nav-button[data-step="2"]');
+  const reviewBtn = document.querySelector('.step4-action-btn.secondary');
+  const openBtn = document.querySelector('.step4-action-btn[data-onboarding-complete="true"]');
+
+  if (backBtn) {
+    backBtn.disabled = stepNumber <= 1;
+    backBtn.style.display = stepNumber === 1 ? 'none' : 'inline-block';
+  }
+  if (nextBtn) {
+    nextBtn.disabled = stepNumber >= totalSteps;
+    nextBtn.style.display = stepNumber < totalSteps ? 'inline-block' : 'none';
+  }
+  if (reviewBtn) {
+    reviewBtn.style.display = stepNumber === totalSteps ? 'inline-block' : 'none';
+  }
+  if (openBtn) {
+    openBtn.style.display = stepNumber === totalSteps ? 'inline-block' : 'none';
+  }
+
+  // Update step heading aria-label
+  const stepHeading = document.querySelector('.step-heading');
+  if (stepHeading) {
+    stepHeading.setAttribute('aria-label', `Step ${stepNumber} of ${totalSteps}`);
+  }
+}
+
+// Initialize onboarding on DOM content loaded
+document.addEventListener('DOMContentLoaded', () => {
+  // Show step 1
+  showStep(1);
+
+  // Step navigation: delegate from the onboarding container
+  onboarding.addEventListener('click', (event) => {
+    const button = event.target.closest('button.step-nav-button');
+    if (!button) return;
+
+    const step = parseInt(button.dataset.step, 10);
+    if (step >= 1 && step < totalSteps) {
+      showStep(step);
+    }
+  });
+
+  // Step 4: "Review how it works" goes back to step 3
+  const reviewButton = onboarding.querySelector('.step4-action-btn.secondary');
+  if (reviewButton) {
+    reviewButton.addEventListener('click', () => {
+      showStep(3);
+    });
+  }
+
+  // Step 4: "Open ChainShield" completes onboarding and shows investigation CTA
+  const openButton = onboarding.querySelector('.step4-action-btn[data-onboarding-complete="true"]');
+  if (openButton) {
+    openButton.addEventListener('click', () => {
+      // Hide onboarding, show investigation CTA
+      onboarding.classList.add('onboarding-hidden');
+      investigateCTA.hidden = false;
+      // Focus the investigate button
+      if (investigateButton) {
+        investigateButton.focus();
+      }
+    });
+  }
+
+  // Keyboard navigation: ArrowLeft/ArrowRight to navigate steps
+  let keyboardStepTimer = null;
+  document.addEventListener('keydown', (event) => {
+    // Prevent default on non-step pages
+    if (!onboarding.classList.contains('onboarding-hidden') && currentStep) {
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        if (currentStep < totalSteps) {
+          showStep(currentStep + 1);
+        }
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        if (currentStep > 1) {
+          showStep(currentStep - 1);
+        }
+      }
+    }
+  });
+});
+
+// --- Existing investigation functionality (unchanged) ---
+
 const button = document.querySelector("#investigate-button");
 const domainLabel = document.querySelector("#page-domain");
 const message = document.querySelector("#message");
