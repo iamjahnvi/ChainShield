@@ -45,8 +45,24 @@ function buildThreatAssessment(result) {
       error instanceof SafeBrowsingError && error.httpStatus !== undefined
         ? `, httpStatus=${error.httpStatus}`
         : "";
+    const diagnostic = error instanceof SafeBrowsingError ? error.diagnostic : undefined;
+    const diagnosticParts = [];
+    if (diagnostic && diagnostic.googleCode !== undefined) {
+      diagnosticParts.push(`googleCode=${diagnostic.googleCode}`);
+    }
+    if (diagnostic && diagnostic.googleStatus) {
+      diagnosticParts.push(`googleStatus=${diagnostic.googleStatus}`);
+    }
+    if (diagnostic && diagnostic.reasons) {
+      diagnosticParts.push(`reasons=${diagnostic.reasons.join(",")}`);
+    }
+    if (diagnostic && diagnostic.message) {
+      diagnosticParts.push(`googleMessage="${diagnostic.message}"`);
+    }
+    const diagnosticSuffix =
+      diagnosticParts.length > 0 ? `, ${diagnosticParts.join(", ")}` : "";
     console.error(
-      `[investigations] Google Safe Browsing check unavailable (category=${reason}${httpStatus})`
+      `[investigations] Google Safe Browsing check unavailable (category=${reason}${httpStatus}${diagnosticSuffix})`
     );
     return {
       status: "unavailable",

@@ -357,6 +357,51 @@ test("Google Safe Browsing HTTP rejection is diagnosed without erasing TinyFish 
   assert.ok(!capturedLogs.join("\n").includes("https://example.com"));
 });
 
+test("Google Safe Browsing 403 diagnostics include sanitized Google error fields", async () => {
+  const submittedUrl = "https://example.com/private/path?session=private-session-value";
+  setSearchFetch(async () =>
+    jsonResponse({ results: [{ title: "Search source", url: "https://news.example/source" }] })
+  );
+  setSafeBrowsingFetch(async () =>
+    jsonResponse(
+      {
+        error: {
+          code: 403,
+          message:
+            `Requests for ${submittedUrl} with key=${TEST_SAFE_BROWSING_KEY} were denied.`,
+          status: "PERMISSION_DENIED",
+          details: [
+            {
+              reason: "API_KEY_SERVICE_BLOCKED",
+              metadata: { privateValue: "must-not-be-logged" }
+            }
+          ]
+        }
+      },
+      403
+    )
+  );
+
+  const { response, body } = await postInvestigation({ url: submittedUrl });
+  const logs = capturedLogs.join("\n");
+
+  assert.equal(response.status, 200);
+  assert.equal(body.threatAssessment.status, "unavailable");
+  assert.equal(body.threatAssessment.providers[0].reason, "http_rejection");
+  assert.equal(body.threatAssessment.providers[0].httpStatus, 403);
+  assert.ok(logs.includes("httpStatus=403"));
+  assert.ok(logs.includes("googleCode=403"));
+  assert.ok(logs.includes("googleStatus=PERMISSION_DENIED"));
+  assert.ok(logs.includes("reasons=API_KEY_SERVICE_BLOCKED"));
+  assert.ok(logs.includes("Requests for [redacted-url] with key=[redacted] were denied."));
+  assert.ok(!logs.includes(TEST_SAFE_BROWSING_KEY));
+  assert.ok(!logs.includes("/private/path"));
+  assert.ok(!logs.includes("session=private-session-value"));
+  assert.ok(!logs.includes("must-not-be-logged"));
+  assert.ok(!JSON.stringify(body).includes("PERMISSION_DENIED"));
+  assert.ok(!JSON.stringify(body).includes("API_KEY_SERVICE_BLOCKED"));
+});
+
 test("Google Safe Browsing timeouts are unavailable, not clean", async () => {
   process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS = "20";
   setSearchFetch(async () => jsonResponse({ results: [] }));

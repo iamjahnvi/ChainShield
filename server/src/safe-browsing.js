@@ -6,12 +6,15 @@ const MAX_CACHE_ENTRIES = 500;
 const positiveCache = new Map();
 
 class SafeBrowsingError extends Error {
-  constructor(code, message, { httpStatus } = {}) {
+  constructor(code, message, { httpStatus, diagnostic } = {}) {
     super(message);
     this.name = "SafeBrowsingError";
     this.code = code;
     if (httpStatus !== undefined) {
       this.httpStatus = httpStatus;
+    }
+    if (diagnostic) {
+      this.diagnostic = diagnostic;
     }
   }
 }
@@ -48,6 +51,75 @@ function parseCacheDuration(value) {
 
   const durationMs = Number(match[1]) * 1000;
   return Number.isFinite(durationMs) && durationMs > 0 ? durationMs : null;
+}
+
+function sanitizeDiagnosticMessage(value, apiKey) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  let message = value;
+  if (apiKey !== "") {
+    message = message.split(apiKey).join("[redacted]");
+  }
+
+  return message
+    .replace(/\b(?:https?|ftp):\/\/[^\s"'<>]+/gi, "[redacted-url]")
+    .replace(/\b(key|token|secret|password)=([^\s&"'<>]+)/gi, "$1=[redacted]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [redacted]")
+    .replace(/\bAIza[0-9A-Za-z_-]{20,}\b/g, "[redacted]")
+    .slice(0, 400);
+}
+
+function safeDiagnosticIdentifier(value) {
+  if (
+    (typeof value === "string" || typeof value === "number") &&
+    /^[A-Za-z0-9_.-]{1,100}$/.test(String(value))
+  ) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function normalizeGoogleError(payload, apiKey) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return undefined;
+  }
+
+  const upstreamError = payload.error;
+  if (!upstreamError || typeof upstreamError !== "object" || Array.isArray(upstreamError)) {
+    return undefined;
+  }
+
+  const diagnostic = {};
+  const code = safeDiagnosticIdentifier(upstreamError.code);
+  const status = safeDiagnosticIdentifier(upstreamError.status);
+  const message = sanitizeDiagnosticMessage(upstreamError.message, apiKey);
+  if (code !== undefined) {
+    diagnostic.googleCode = code;
+  }
+  if (status !== undefined) {
+    diagnostic.googleStatus = status;
+  }
+  if (message !== undefined) {
+    diagnostic.message = message;
+  }
+
+  if (Array.isArray(upstreamError.details)) {
+    const reasons = [
+      ...new Set(
+        upstreamError.details
+          .filter((detail) => detail && typeof detail === "object" && !Array.isArray(detail))
+          .map((detail) => safeDiagnosticIdentifier(detail.reason))
+          .filter(Boolean)
+      )
+    ];
+    if (reasons.length > 0) {
+      diagnostic.reasons = reasons;
+    }
+  }
+
+  return Object.keys(diagnostic).length > 0 ? diagnostic : undefined;
 }
 
 function normalizeMatches(payload) {
@@ -168,8 +240,15 @@ async function checkSafeBrowsing(submittedUrl, options = {}) {
         );
       }
       if (!response.ok) {
+        let diagnostic;
+        try {
+          diagnostic = normalizeGoogleError(await response.json(), apiKey);
+        } catch {
+          diagnostic = undefined;
+        }
         throw new SafeBrowsingError("http_rejection", "Safe Browsing returned an error.", {
-          httpStatus: response.status
+          httpStatus: response.status,
+          diagnostic
         });
       }
 
