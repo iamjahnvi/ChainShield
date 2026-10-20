@@ -210,9 +210,10 @@ Open `server/.env` and add your own provider keys:
 ```dotenv
 TINYFISH_API_KEY=your_tinyfish_api_key
 GOOGLE_SAFE_BROWSING_API_KEY=your_google_safe_browsing_api_key
+ETH_RPC_URL=your_ethereum_rpc_https_endpoint
 ```
 
-Replace the placeholders with your own keys. Never commit this file or share its contents. Restrict the Google key to the Safe Browsing API in Google Cloud.
+Replace the placeholders with your own provider values. `ETH_RPC_URL` must be an HTTPS Ethereum JSON-RPC endpoint; keep any provider credential in this backend-only setting. Never commit this file or share its contents. Restrict the Google key to the Safe Browsing API in Google Cloud.
 
 ### 4. Run the tests
 
@@ -276,6 +277,8 @@ After changing extension files, return to `chrome://extensions`, click **Reload*
 |---|---|---|
 | `TINYFISH_API_KEY` | `server/.env` | Authenticates requests from the backend to TinyFish |
 | `GOOGLE_SAFE_BROWSING_API_KEY` | `server/.env` | Authenticates backend URL lookups with Google Safe Browsing |
+| `ETH_RPC_URL` | `server/.env` | Backend-only HTTPS Ethereum JSON-RPC endpoint, used only when a contract address is submitted |
+| `ETH_RPC_TIMEOUT_MS` | Backend environment | Optional timeout for each Ethereum JSON-RPC request; defaults to `6000` ms |
 | `PORT` | Backend environment | Optional server port; defaults to `3000` |
 
 The extension currently expects the API at `http://localhost:3000`. If you change the backend port, update the API URL in `extension/popup.js` to match.
@@ -317,9 +320,12 @@ Content-Type: application/json
 
 ```json
 {
-  "url": "https://example.com"
+  "url": "https://example.com",
+  "contractAddress": "0x0000000000000000000000000000000000000000"
 }
 ```
+
+`contractAddress` is optional and must be `0x` followed by exactly 40 hexadecimal characters. When omitted, no Ethereum RPC request is made.
 
 PowerShell example:
 
@@ -368,6 +374,13 @@ The following is an illustrative example of the response structure, not a claim 
   },
   "urlSignals": {
     "findings": []
+  },
+  "ethereumAssessment": {
+    "status": "available",
+    "address": "0x0000000000000000000000000000000000000000",
+    "chainId": "0x1",
+    "latestBlock": "0x1234",
+    "codeStatus": "no_bytecode"
   }
 }
 ```
@@ -379,6 +392,8 @@ The actual evidence, summary, and status depend on the backend implementation an
 Google requires qualifying language for reported threats, a linked “Advisory provided by Google” attribution, and notice that results can include false positives and false negatives. The popup displays these notices. Review the current [Safe Browsing usage requirements](https://developers.google.com/safe-browsing/v4/usage-limits) before using this integration beyond non-commercial development.
 
 `urlSignals` is a separate, local heuristic analysis of the submitted URL structure. It can report an IP-address hostname, a punycode hostname label, or at least four labels before the final two hostname labels. These are low-severity review signals, not confirmed threat intelligence; an empty findings list does not mean the website is safe. This analysis does not visit the submitted website.
+
+`ethereumAssessment` is an optional-address, read-only lookup against the backend-configured Ethereum RPC endpoint. Its status is `not_requested`, `available`, or `unavailable`. When available, it reports the chain ID, latest block, and whether `eth_getCode` returned bytecode at the latest block. `0x` means no bytecode was returned at that chain and block; it does not prove that the address is an externally owned account. Bytecode presence or absence does not establish whether an address or contract is safe or malicious. Raw bytecode is not returned.
 
 ### Response fields
 
@@ -392,6 +407,7 @@ Google requires qualifying language for reported threats, a linked “Advisory p
 | `demo` | Indicates whether the response is a demo response. |
 | `threatAssessment` | Separate Google Safe Browsing lookup result; it does not use TinyFish relevance as a threat score. |
 | `urlSignals` | Separate structural URL heuristic findings; these do not change the Google Safe Browsing status. |
+| `ethereumAssessment` | Optional read-only Ethereum account/code lookup, separate from search relevance and Safe Browsing. |
 
 Evidence items may contain `title`, `url`, `snippet`, `source`, `position`, `siteName`, `category`, and `categoryReason`, depending on the available upstream data and normalization.
 
@@ -538,6 +554,8 @@ ChainShield follows a conservative, evidence-first approach.
 - **Heuristic separation:** Structural URL signals are displayed separately from provider findings and never establish that a website is malicious.
 - **Limited lookup:** Google Safe Browsing checks only the submitted URL; an unavailable or no-match response does not establish safety.
 - **No target fetching for heuristics:** URL structure is analyzed locally from the submitted URL; the heuristic module does not visit the target or follow redirects.
+- **Read-only Ethereum RPC:** Ethereum RPC calls are limited to `eth_chainId`, `eth_blockNumber`, and `eth_getCode`; no wallet connection, signing, or transaction submission occurs.
+- **Backend-only RPC endpoint:** `ETH_RPC_URL` is read only by the backend and is never accepted from a request or returned to the extension.
 - **Input validation:** Investigation URLs are validated before searching.
 - **Safe source rendering:** Titles, snippets, and explanations should be rendered as text rather than trusted HTML.
 - **Explicit user action:** The user initiates an investigation from the popup.
@@ -585,6 +603,7 @@ Replace `13528` with the PID shown on your machine. Inspect the process before s
 - Search results depend on the upstream TinyFish Search API response.
 - The system does not perform a full malware scan, phishing-page analysis, smart-contract audit, or on-chain investigation.
 - URL heuristics currently cover only IP-address hostnames, explicit punycode labels, and unusually deep hostnames. They do not inspect page content, redirects, linked domains, or typosquatting.
+- Ethereum code inspection is only an observation at the configured chain's latest block; it is not a contract audit, safety verdict, or proof that an address without code is an externally owned account.
 - Classification is heuristic and can make mistakes.
 - Search-result excerpts are not independently verified facts.
 - No search results do not establish safety.

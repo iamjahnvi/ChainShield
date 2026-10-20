@@ -19,6 +19,20 @@
 
       <p class="intro">Investigate a website with evidence, not guesswork.</p>
 
+      <label class="contract-address-label" for="contract-address">
+        Optional Ethereum contract address
+      </label>
+      <input
+        id="contract-address"
+        class="contract-address-input"
+        type="text"
+        inputmode="text"
+        maxlength="42"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="0x… (40 hexadecimal characters)"
+      >
+
       <button id="investigate-button" type="button">Investigate this website</button>
       <p id="page-domain" class="page-domain" aria-live="polite"></p>
       <p id="message" class="message" role="status" aria-live="polite">
@@ -52,6 +66,15 @@
         </div>
         <div id="url-signal-details"></div>
         <p class="url-signals-disclaimer">These are heuristic warnings, not confirmed threat intelligence. No signals does not mean this website is safe.</p>
+      </section>
+
+      <section id="ethereum-assessment" class="ethereum-assessment" aria-labelledby="ethereum-heading" hidden>
+        <div class="result-heading-row">
+          <h2 id="ethereum-heading">Ethereum address check</h2>
+          <span class="ethereum-badge">READ-ONLY RPC</span>
+        </div>
+        <div id="ethereum-details"></div>
+        <p class="ethereum-disclaimer">Bytecode presence or absence does not establish whether an address is safe or malicious, or prove that it is an externally owned account.</p>
       </section>
 
       <footer>Search relevance is not a threat verdict. No automatic blocking is performed.</footer>

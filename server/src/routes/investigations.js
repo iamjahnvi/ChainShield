@@ -10,6 +10,11 @@ const {
   checkSafeBrowsing
 } = require("../safe-browsing");
 const { analyzeUrl } = require("../url-analysis");
+const {
+  EthereumRpcError,
+  checkEthereumContract,
+  validateContractAddress
+} = require("../ethereum-rpc");
 
 const router = express.Router();
 
@@ -101,6 +106,28 @@ function buildThreatAssessment(result) {
   };
 }
 
+function buildEthereumAssessment(result, contractAddress) {
+  if (!contractAddress) {
+    return { status: "not_requested" };
+  }
+
+  if (result.status === "rejected") {
+    const error = result.reason;
+    const reason = error instanceof EthereumRpcError ? error.code : "provider_error";
+    console.warn(`[investigations] Ethereum RPC check unavailable (category=${reason})`);
+    return {
+      status: "unavailable",
+      address: contractAddress.toLowerCase(),
+      reason
+    };
+  }
+
+  return {
+    status: "available",
+    ...result.value
+  };
+}
+
 const ERROR_RESPONSES = {
   config_missing: {
     status: 503,
@@ -130,7 +157,7 @@ const ERROR_RESPONSES = {
 };
 
 router.post("/", async (req, res) => {
-  const { url: submittedUrl } = req.body || {};
+  const { url: submittedUrl, contractAddress } = req.body || {};
 
   if (typeof submittedUrl !== "string" || submittedUrl.trim() === "") {
     return res.status(400).json({ error: "A URL is required." });
@@ -147,13 +174,22 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "Only HTTP and HTTPS URLs are supported." });
   }
 
+  if (contractAddress !== undefined && !validateContractAddress(contractAddress)) {
+    return res.status(400).json({
+      error: "contractAddress must be a 20-byte hexadecimal address beginning with 0x."
+    });
+  }
+
   const domain = url.hostname;
   const urlSignals = { findings: analyzeUrl(url) };
 
   try {
-    const [searchResult, threatResult] = await Promise.allSettled([
+    const [searchResult, threatResult, ethereumResult] = await Promise.allSettled([
       searchTinyFish(buildInvestigationQuery(domain)),
-      checkSafeBrowsing(url.toString())
+      checkSafeBrowsing(url.toString()),
+      contractAddress
+        ? checkEthereumContract(contractAddress)
+        : Promise.resolve(null)
     ]);
 
     if (searchResult.status === "rejected") {
@@ -161,6 +197,9 @@ router.post("/", async (req, res) => {
     }
 
     const threatAssessment = buildThreatAssessment(threatResult);
+    const ethereumAssessment = contractAddress
+      ? buildEthereumAssessment(ethereumResult, contractAddress)
+      : { status: "not_requested" };
     const results = searchResult.value;
     const evidence = prepareEvidence(results, domain);
 
@@ -173,7 +212,8 @@ router.post("/", async (req, res) => {
         investigationType: "web_search",
         demo: false,
         threatAssessment,
-        urlSignals
+        urlSignals,
+        ethereumAssessment
       });
     }
 
@@ -185,7 +225,8 @@ router.post("/", async (req, res) => {
       investigationType: "web_search",
       demo: false,
       threatAssessment,
-      urlSignals
+      urlSignals,
+      ethereumAssessment
     });
   } catch (error) {
     const isTinyFishError = error instanceof TinyFishError;

@@ -31,6 +31,9 @@ const threatAssessment = document.querySelector("#threat-assessment");
 const threatDetails = document.querySelector("#threat-details");
 const urlSignals = document.querySelector("#url-signals");
 const urlSignalDetails = document.querySelector("#url-signal-details");
+const contractAddressInput = document.querySelector("#contract-address");
+const ethereumAssessment = document.querySelector("#ethereum-assessment");
+const ethereumDetails = document.querySelector("#ethereum-details");
 
 function setMessage(text, state = "") {
   message.textContent = text;
@@ -185,7 +188,50 @@ function displayResult(data) {
 
   displayThreatAssessment(data.threatAssessment);
   displayUrlSignals(data.urlSignals);
+  displayEthereumAssessment(data.ethereumAssessment);
   result.hidden = false;
+}
+
+function displayEthereumAssessment(assessment) {
+  ethereumDetails.replaceChildren();
+  if (!assessment || assessment.status === "not_requested") {
+    ethereumAssessment.hidden = true;
+    return;
+  }
+
+  ethereumAssessment.hidden = false;
+  if (assessment.status !== "available") {
+    const unavailable = document.createElement("p");
+    unavailable.className = "ethereum-status";
+    unavailable.textContent =
+      "Ethereum RPC could not complete this read-only check. No conclusion was made about the address.";
+    ethereumDetails.append(unavailable);
+    return;
+  }
+
+  const fields = [
+    ["Address", assessment.address],
+    ["Chain ID", assessment.chainId],
+    ["Latest block", assessment.latestBlock],
+    [
+      "Code at latest block",
+      assessment.codeStatus === "bytecode_present"
+        ? "Bytecode present"
+        : assessment.codeStatus === "no_bytecode"
+          ? "No bytecode returned"
+          : "Unavailable"
+    ]
+  ];
+
+  for (const [label, value] of fields) {
+    if (typeof value !== "string") {
+      continue;
+    }
+    const row = document.createElement("p");
+    row.className = "ethereum-detail";
+    row.textContent = `${label}: ${value}`;
+    ethereumDetails.append(row);
+  }
 }
 
 function displayUrlSignals(assessment) {
@@ -336,6 +382,7 @@ button.addEventListener("click", async () => {
   result.hidden = true;
   threatAssessment.hidden = true;
   urlSignals.hidden = true;
+  ethereumAssessment.hidden = true;
   domainLabel.textContent = "";
   setMessage("Checking the active tab…");
 
@@ -347,15 +394,28 @@ button.addEventListener("click", async () => {
     }
 
     const domain = new URL(tab.url).hostname;
+    const contractAddress = contractAddressInput.value.trim();
+    if (contractAddress !== "" && !/^0x[0-9a-fA-F]{40}$/.test(contractAddress)) {
+      setMessage(
+        "Enter an Ethereum address as 0x followed by exactly 40 hexadecimal characters, or leave the field empty.",
+        "error"
+      );
+      return;
+    }
+
     domainLabel.textContent = `Website: ${domain}`;
     setMessage(`Searching the web for public sources about ${domain}…`, "loading");
 
     let response;
     try {
+      const requestBody = { url: tab.url };
+      if (contractAddress !== "") {
+        requestBody.contractAddress = contractAddress;
+      }
       response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: tab.url })
+        body: JSON.stringify(requestBody)
       });
     } catch {
       throw new Error("Could not reach the local server. Make sure it is running on port 3000.");
