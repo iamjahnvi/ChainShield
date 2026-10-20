@@ -34,10 +34,18 @@
         <p id="result-summary" class="result-summary"></p>
         <p id="domain-note" class="domain-note"></p>
         <div id="evidence-groups" class="evidence-groups"></div>
-        <p class="result-note">These are web search results, not verified security findings. Relevance to a domain does not establish maliciousness.</p>
       </section>
 
-      <footer>No real security scan has been performed.</footer>
+      <section id="threat-assessment" class="threat-assessment" aria-labelledby="threat-heading" hidden>
+        <div class="result-heading-row">
+          <h2 id="threat-heading">Threat intelligence</h2>
+          <span class="threat-badge">GOOGLE SAFE BROWSING</span>
+        </div>
+        <div id="threat-details"></div>
+        <p class="threat-disclaimer">A match means the submitted URL may be unsafe. Results can have false positives or miss threats; no match does not mean this website is safe. This lookup is not comprehensive protection.</p>
+      </section>
+
+      <footer>Search relevance is not a threat verdict. No automatic blocking is performed.</footer>
     </main>
   </body>
 </html>

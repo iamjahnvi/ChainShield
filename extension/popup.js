@@ -27,6 +27,8 @@ const resultStatus = document.querySelector("#result-status");
 const resultSummary = document.querySelector("#result-summary");
 const domainNote = document.querySelector("#domain-note");
 const evidenceGroups = document.querySelector("#evidence-groups");
+const threatAssessment = document.querySelector("#threat-assessment");
+const threatDetails = document.querySelector("#threat-details");
 
 function setMessage(text, state = "") {
   message.textContent = text;
@@ -179,12 +181,96 @@ function displayResult(data) {
     }
   }
 
+  displayThreatAssessment(data.threatAssessment);
   result.hidden = false;
+}
+
+function displayThreatAssessment(assessment) {
+  threatDetails.replaceChildren();
+  threatAssessment.hidden = false;
+
+  if (!assessment || typeof assessment !== "object") {
+    threatDetails.append(
+      createThreatMessage("Threat assessment unavailable: the server did not return a result.", "unavailable")
+    );
+    return;
+  }
+
+  const providers = Array.isArray(assessment.providers) ? assessment.providers : [];
+  const statusMessages = {
+    reported: "Google Safe Browsing reports a possible threat for the submitted URL.",
+    no_match: "Google Safe Browsing returned no match for the submitted URL. This does not mean the website is safe.",
+    incomplete: "The threat check is incomplete; not all requested checks produced a result.",
+    unavailable: "Google Safe Browsing could not complete this lookup."
+  };
+
+  threatDetails.append(
+    createThreatMessage(
+      statusMessages[assessment.status] || statusMessages.unavailable,
+      assessment.status
+    )
+  );
+
+  for (const provider of providers) {
+    if (!provider || typeof provider !== "object") {
+      continue;
+    }
+    const matches = Array.isArray(provider.matches) ? provider.matches : [];
+    for (const match of matches) {
+      if (!match || typeof match !== "object") {
+        continue;
+      }
+      const item = document.createElement("p");
+      item.className = "threat-match";
+      item.textContent = `Reported indicator: ${formatThreatType(match.threatType)}`;
+      if (typeof match.matchedUrl === "string" && isSupportedUrl(match.matchedUrl)) {
+        item.append(document.createTextNode(" — "));
+        const link = document.createElement("a");
+        link.href = match.matchedUrl;
+        link.textContent = match.matchedUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        item.append(link);
+      }
+      threatDetails.append(item);
+    }
+  }
+
+  if (assessment.status === "reported") {
+    const attribution = document.createElement("p");
+    attribution.className = "threat-attribution";
+    const link = document.createElement("a");
+    link.href = "https://developers.google.com/safe-browsing/v4/advisory";
+    link.textContent = "Advisory provided by Google";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    attribution.append(link);
+    threatDetails.append(attribution);
+  }
+}
+
+function createThreatMessage(text, status) {
+  const message = document.createElement("p");
+  message.className = "threat-status";
+  message.dataset.status = status;
+  message.textContent = text;
+  return message;
+}
+
+function formatThreatType(value) {
+  if (value === "SOCIAL_ENGINEERING") {
+    return "potential phishing or social engineering";
+  }
+  if (value === "MALWARE") {
+    return "malware";
+  }
+  return "potential threat";
 }
 
 button.addEventListener("click", async () => {
   button.disabled = true;
   result.hidden = true;
+  threatAssessment.hidden = true;
   domainLabel.textContent = "";
   setMessage("Checking the active tab…");
 

@@ -5,12 +5,19 @@ const {
   TINYFISH_SEARCH_ENDPOINT,
   setSearchFetch
 } = require("../src/tinyfish");
+const {
+  SAFE_BROWSING_ENDPOINT,
+  setSafeBrowsingFetch
+} = require("../src/safe-browsing");
 
 const TEST_API_KEY = "unit-test-secret-key-must-never-leak";
+const TEST_SAFE_BROWSING_KEY = "safe-browsing-test-key-must-never-leak";
 
 const originalConsoleError = console.error;
 const originalApiKey = process.env.TINYFISH_API_KEY;
 const originalTimeoutMs = process.env.TINYFISH_TIMEOUT_MS;
+const originalSafeBrowsingApiKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+const originalSafeBrowsingTimeoutMs = process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS;
 
 let server;
 let baseUrl;
@@ -28,6 +35,7 @@ function guardFetch() {
   setSearchFetch(async () => {
     throw new Error("No TinyFish fetch mock was configured for this test.");
   });
+  setSafeBrowsingFetch(async () => jsonResponse({}));
 }
 
 async function postInvestigation(body) {
@@ -48,8 +56,11 @@ before(async () => {
 
 after(async () => {
   setSearchFetch(null);
+  setSafeBrowsingFetch(null);
   process.env.TINYFISH_API_KEY = originalApiKey;
   process.env.TINYFISH_TIMEOUT_MS = originalTimeoutMs;
+  process.env.GOOGLE_SAFE_BROWSING_API_KEY = originalSafeBrowsingApiKey;
+  process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS = originalSafeBrowsingTimeoutMs;
   await new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
@@ -58,6 +69,8 @@ after(async () => {
 beforeEach(() => {
   process.env.TINYFISH_API_KEY = TEST_API_KEY;
   delete process.env.TINYFISH_TIMEOUT_MS;
+  process.env.GOOGLE_SAFE_BROWSING_API_KEY = TEST_SAFE_BROWSING_KEY;
+  delete process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS;
   capturedLogs = [];
   console.error = (...args) => {
     capturedLogs.push(args.map(String).join(" "));
@@ -71,6 +84,7 @@ afterEach(() => {
 
 test("valid investigation request returns validated TinyFish results", async () => {
   let captured;
+  let safeBrowsingRequest;
   setSearchFetch(async (url, init) => {
     captured = { url, init };
     return jsonResponse({
@@ -101,6 +115,10 @@ test("valid investigation request returns validated TinyFish results", async () 
       ]
     });
   });
+  setSafeBrowsingFetch(async (url, init) => {
+    safeBrowsingRequest = { url, init };
+    return jsonResponse({});
+  });
 
   const { response, body } = await postInvestigation({
     url: "https://www.example.com/path?q=demo"
@@ -111,6 +129,9 @@ test("valid investigation request returns validated TinyFish results", async () 
   assert.equal(body.domain, "www.example.com");
   assert.equal(body.investigationType, "web_search");
   assert.equal(body.demo, false);
+  assert.equal(body.threatAssessment.status, "no_match");
+  assert.equal(body.threatAssessment.providers[0].id, "google_safe_browsing");
+  assert.equal(body.threatAssessment.providers[0].scope, "submitted_url");
   assert.match(body.summary, /do not establish whether the website is safe or malicious/i);
 
   assert.equal(body.evidence.length, 5);
@@ -184,8 +205,16 @@ test("valid investigation request returns validated TinyFish results", async () 
   assert.equal(captured.init.method, "GET");
   assert.equal(captured.init.headers["X-API-Key"], TEST_API_KEY);
   assert.equal(captured.init.redirect, "error");
+  assert.ok(safeBrowsingRequest.url.startsWith(SAFE_BROWSING_ENDPOINT));
+  assert.ok(safeBrowsingRequest.url.includes(encodeURIComponent(TEST_SAFE_BROWSING_KEY)));
+  assert.equal(safeBrowsingRequest.init.method, "POST");
+  assert.equal(
+    JSON.parse(safeBrowsingRequest.init.body).threatInfo.threatEntries[0].url,
+    "https://www.example.com/path?q=demo"
+  );
 
   assert.ok(!JSON.stringify(body).includes(TEST_API_KEY));
+  assert.ok(!JSON.stringify(body).includes(TEST_SAFE_BROWSING_KEY));
   assert.equal(capturedLogs.length, 0);
 });
 
@@ -200,7 +229,208 @@ test("empty search results return a neutral no_results response", async () => {
   assert.equal(body.domain, "example.com");
   assert.equal(body.investigationType, "web_search");
   assert.equal(body.demo, false);
+  assert.equal(body.threatAssessment.status, "no_match");
   assert.match(body.summary, /does not mean the website is safe/i);
+});
+
+test("Google Safe Browsing matches are returned separately from search evidence", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(async () =>
+    jsonResponse({
+      matches: [
+        {
+          threatType: "SOCIAL_ENGINEERING",
+          threat: { url: "https://example.com/login" }
+        },
+        {
+          threatType: "MALWARE",
+          threat: { url: "https://example.com/payload" }
+        }
+      ]
+    })
+  );
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com/login"
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "no_results");
+  assert.deepEqual(body.evidence, []);
+  assert.equal(body.threatAssessment.status, "reported");
+  assert.equal(body.threatAssessment.providers[0].status, "reported");
+  assert.deepEqual(body.threatAssessment.providers[0].matches, [
+    { threatType: "SOCIAL_ENGINEERING", matchedUrl: "https://example.com/login" },
+    { threatType: "MALWARE", matchedUrl: "https://example.com/payload" }
+  ]);
+});
+
+test("Google Safe Browsing positive results are cached for the returned duration", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  let safeBrowsingCalls = 0;
+  setSafeBrowsingFetch(async () => {
+    safeBrowsingCalls += 1;
+    return jsonResponse({
+      matches: [
+        {
+          threatType: "MALWARE",
+          threat: { url: "https://cache-check.example/path" },
+          cacheDuration: "300.000s"
+        }
+      ]
+    });
+  });
+
+  const first = await postInvestigation({ url: "https://cache-check.example/path" });
+  const second = await postInvestigation({ url: "https://cache-check.example/path" });
+
+  assert.equal(first.response.status, 200);
+  assert.equal(second.response.status, 200);
+  assert.equal(first.body.threatAssessment.status, "reported");
+  assert.equal(second.body.threatAssessment.status, "reported");
+  assert.equal(safeBrowsingCalls, 1);
+});
+
+test("Google Safe Browsing no-match response is not described as safe", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(async () => jsonResponse({}));
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com"
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.threatAssessment.status, "no_match");
+  assert.doesNotMatch(JSON.stringify(body.threatAssessment), /website is safe|clean/i);
+});
+
+test("missing Google Safe Browsing key returns unavailable without calling provider", async () => {
+  delete process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+
+  let called = false;
+  setSafeBrowsingFetch(async () => {
+    called = true;
+    return jsonResponse({});
+  });
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com"
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "no_results");
+  assert.equal(body.threatAssessment.status, "unavailable");
+  assert.equal(body.threatAssessment.providers[0].reason, "config_missing");
+  assert.equal(called, false);
+});
+
+test("Google Safe Browsing provider errors do not erase TinyFish evidence", async () => {
+  setSearchFetch(async () =>
+    jsonResponse({ results: [{ title: "Search source", url: "https://news.example/source" }] })
+  );
+  setSafeBrowsingFetch(async () =>
+    jsonResponse({ error: `private upstream detail ${TEST_SAFE_BROWSING_KEY}` }, 503)
+  );
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com"
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "research_available");
+  assert.equal(body.evidence.length, 1);
+  assert.equal(body.threatAssessment.status, "unavailable");
+  assert.equal(body.threatAssessment.providers[0].reason, "upstream");
+  assert.ok(!JSON.stringify(body).includes(TEST_SAFE_BROWSING_KEY));
+  assert.ok(!JSON.stringify(body).includes("private upstream detail"));
+  assert.ok(!capturedLogs.join("\n").includes(TEST_SAFE_BROWSING_KEY));
+  assert.ok(!capturedLogs.join("\n").includes("private upstream detail"));
+});
+
+test("Google Safe Browsing timeouts are unavailable, not clean", async () => {
+  process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS = "20";
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(
+    (url, init) =>
+      new Promise((resolve, reject) => {
+        init.signal.addEventListener("abort", () => {
+          reject(new Error("request aborted"));
+        });
+      })
+  );
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com"
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.threatAssessment.status, "unavailable");
+  assert.equal(body.threatAssessment.providers[0].reason, "timeout");
+});
+
+test("Google Safe Browsing timeout covers response parsing", async () => {
+  process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS = "20";
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(async () => ({
+    ok: true,
+    status: 200,
+    json: () => new Promise(() => {})
+  }));
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com"
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.threatAssessment.status, "unavailable");
+  assert.equal(body.threatAssessment.providers[0].reason, "timeout");
+});
+
+test("Google Safe Browsing network failures are unavailable", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(async () => {
+    throw new Error(`network detail ${TEST_SAFE_BROWSING_KEY}`);
+  });
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com"
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.threatAssessment.status, "unavailable");
+  assert.equal(body.threatAssessment.providers[0].reason, "network");
+  assert.ok(!JSON.stringify(body).includes(TEST_SAFE_BROWSING_KEY));
+  assert.ok(!capturedLogs.join("\n").includes(TEST_SAFE_BROWSING_KEY));
+});
+
+test("malformed Google Safe Browsing responses are unavailable, not clean", async (t) => {
+  const cases = [
+    { name: "malformed JSON", response: { ok: true, status: 200, json: async () => { throw new Error("sensitive detail"); } } },
+    { name: "matches is not an array", response: jsonResponse({ matches: "invalid" }) },
+    {
+      name: "match has unsupported shape",
+      response: jsonResponse({
+        matches: [{ threatType: "UNKNOWN", threat: { url: "https://example.com" } }]
+      })
+    }
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      setSearchFetch(async () => jsonResponse({ results: [] }));
+      setSafeBrowsingFetch(async () => testCase.response);
+
+      const { response, body } = await postInvestigation({
+        url: "https://example.com"
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(body.threatAssessment.status, "unavailable");
+      assert.equal(body.threatAssessment.providers[0].reason, "bad_response");
+      assert.ok(!JSON.stringify(body).includes("sensitive detail"));
+    });
+  }
 });
 
 test("missing, null, and non-array results are malformed upstream responses", async (t) => {

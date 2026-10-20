@@ -5,6 +5,10 @@ const {
   searchTinyFish
 } = require("../tinyfish");
 const { CATEGORIES, prepareEvidence } = require("../classification");
+const {
+  SafeBrowsingError,
+  checkSafeBrowsing
+} = require("../safe-browsing");
 
 const router = express.Router();
 
@@ -30,6 +34,40 @@ function buildSummary(domain, evidence) {
     `related to ${domain}. Relevance is not proof of malicious activity. ` +
     "These results do not establish whether the website is safe or malicious."
   );
+}
+
+function buildThreatAssessment(result) {
+  if (result.status === "rejected") {
+    const error = result.reason;
+    const reason =
+      error instanceof SafeBrowsingError ? error.code : "provider_error";
+    console.error(`[investigations] Google Safe Browsing check unavailable (code=${reason})`);
+    return {
+      status: "unavailable",
+      providers: [
+        {
+          id: "google_safe_browsing",
+          name: "Google Safe Browsing",
+          status: "unavailable",
+          reason
+        }
+      ]
+    };
+  }
+
+  const matches = result.value;
+  return {
+    status: matches.length > 0 ? "reported" : "no_match",
+    providers: [
+      {
+        id: "google_safe_browsing",
+        name: "Google Safe Browsing",
+        status: matches.length > 0 ? "reported" : "no_match",
+        scope: "submitted_url",
+        matches
+      }
+    ]
+  };
 }
 
 const ERROR_RESPONSES = {
@@ -81,7 +119,17 @@ router.post("/", async (req, res) => {
   const domain = url.hostname;
 
   try {
-    const results = await searchTinyFish(buildInvestigationQuery(domain));
+    const [searchResult, threatResult] = await Promise.allSettled([
+      searchTinyFish(buildInvestigationQuery(domain)),
+      checkSafeBrowsing(url.toString())
+    ]);
+
+    if (searchResult.status === "rejected") {
+      throw searchResult.reason;
+    }
+
+    const threatAssessment = buildThreatAssessment(threatResult);
+    const results = searchResult.value;
     const evidence = prepareEvidence(results, domain);
 
     if (evidence.length === 0) {
@@ -91,7 +139,8 @@ router.post("/", async (req, res) => {
         domain,
         evidence: [],
         investigationType: "web_search",
-        demo: false
+        demo: false,
+        threatAssessment
       });
     }
 
@@ -101,7 +150,8 @@ router.post("/", async (req, res) => {
       domain,
       evidence,
       investigationType: "web_search",
-      demo: false
+      demo: false,
+      threatAssessment
     });
   } catch (error) {
     const isTinyFishError = error instanceof TinyFishError;

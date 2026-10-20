@@ -205,13 +205,14 @@ Create a local environment file from the provided example:
 Copy-Item .env.example .env
 ```
 
-Open `server/.env` and add your own TinyFish API key:
+Open `server/.env` and add your own provider keys:
 
 ```dotenv
 TINYFISH_API_KEY=your_tinyfish_api_key
+GOOGLE_SAFE_BROWSING_API_KEY=your_google_safe_browsing_api_key
 ```
 
-Replace the placeholder with your own key. Never commit this file or share its contents.
+Replace the placeholders with your own keys. Never commit this file or share its contents. Restrict the Google key to the Safe Browsing API in Google Cloud.
 
 ### 4. Run the tests
 
@@ -274,11 +275,12 @@ After changing extension files, return to `chrome://extensions`, click **Reload*
 | Setting | Location | Purpose |
 |---|---|---|
 | `TINYFISH_API_KEY` | `server/.env` | Authenticates requests from the backend to TinyFish |
+| `GOOGLE_SAFE_BROWSING_API_KEY` | `server/.env` | Authenticates backend URL lookups with Google Safe Browsing |
 | `PORT` | Backend environment | Optional server port; defaults to `3000` |
 
 The extension currently expects the API at `http://localhost:3000`. If you change the backend port, update the API URL in `extension/popup.js` to match.
 
-Do not put the TinyFish key in the extension's JavaScript, HTML, manifest, or any response sent to the browser.
+The Google Safe Browsing integration is for non-commercial development use. Google directs commercial users to Web Risk. The submitted URL is sent to Google for lookup. Positive matches are cached in memory only for the provider's returned cache duration; no lookup history is persisted. Do not put either provider key in the extension's JavaScript, HTML, manifest, or any response sent to the browser.
 
 ---
 
@@ -351,11 +353,27 @@ The following is an illustrative example of the response structure, not a claim 
     }
   ],
   "investigationType": "web_search",
-  "demo": false
+  "demo": false,
+  "threatAssessment": {
+    "status": "no_match",
+    "providers": [
+      {
+        "id": "google_safe_browsing",
+        "name": "Google Safe Browsing",
+        "status": "no_match",
+        "scope": "submitted_url",
+        "matches": []
+      }
+    ]
+  }
 }
 ```
 
 The actual evidence, summary, and status depend on the backend implementation and upstream search response.
+
+`threatAssessment` is separate from TinyFish evidence and may have `reported`, `no_match`, `incomplete`, or `unavailable` status. A `no_match` means only that Google Safe Browsing returned no match for the submitted URL; it is not a safety verdict. An unavailable provider is never represented as a clean result.
+
+Google requires qualifying language for reported threats, a linked “Advisory provided by Google” attribution, and notice that results can include false positives and false negatives. The popup displays these notices. Review the current [Safe Browsing usage requirements](https://developers.google.com/safe-browsing/v4/usage-limits) before using this integration beyond non-commercial development.
 
 ### Response fields
 
@@ -367,6 +385,7 @@ The actual evidence, summary, and status depend on the backend implementation an
 | `evidence` | List of normalized search results and their classifications. |
 | `investigationType` | Identifies the investigation as a web search. |
 | `demo` | Indicates whether the response is a demo response. |
+| `threatAssessment` | Separate Google Safe Browsing lookup result; it does not use TinyFish relevance as a threat score. |
 
 Evidence items may contain `title`, `url`, `snippet`, `source`, `position`, `siteName`, `category`, and `categoryReason`, depending on the available upstream data and normalization.
 
@@ -426,6 +445,7 @@ ChainShield/
 │   ├── src/
 │   │   ├── app.js
 │   │   ├── tinyfish.js
+│   │   ├── safe-browsing.js
 │   │   ├── classification.js
 │   │   └── routes/
 │   │       └── investigations.js
@@ -453,6 +473,7 @@ ChainShield/
 | `extension/popup.js` | Reads the active tab, calls the backend, and renders investigation results. |
 | `server/src/app.js` | Configures Express, middleware, health checks, and server startup. |
 | `server/src/tinyfish.js` | Builds the search query, calls TinyFish, and normalizes upstream responses. |
+| `server/src/safe-browsing.js` | Performs a timed, backend-only Google Safe Browsing URL lookup. |
 | `server/src/classification.js` | Deduplicates evidence and assigns categories with explanations. |
 | `server/src/routes/investigations.js` | Validates investigation requests and constructs API responses. |
 | `server/test/app.test.js` | Tests the health endpoint and request validation. |
@@ -479,9 +500,10 @@ The test suite should cover:
 - Conservative URL deduplication.
 - Empty and malformed upstream responses.
 - Upstream failures and safe error handling.
+- Google Safe Browsing matches, no-match results, configuration errors, timeouts, and malformed responses.
 - Evidence categories and explanations.
 
-Mocked tests do not verify the availability of the live TinyFish service or the validity of your API key.
+Mocked tests do not verify live provider availability, API-key validity, or Google Cloud API restrictions.
 
 ### Manual verification checklist
 
@@ -494,7 +516,9 @@ Mocked tests do not verify the availability of the live TinyFish service or the 
 - [ ] No-results responses do not imply that a site is safe.
 - [ ] API failures are displayed as errors, not as successful empty investigations.
 - [ ] Chrome internal pages such as `chrome://settings` are rejected as unsupported.
-- [ ] No API key appears in the extension or its responses.
+- [ ] No API key appears in the extension or API responses.
+- [ ] A Google match is shown separately from web-search relevance and includes Google's advisory attribution.
+- [ ] No match and unavailable checks are not described as safe.
 
 ---
 
@@ -502,8 +526,10 @@ Mocked tests do not verify the availability of the live TinyFish service or the 
 
 ChainShield follows a conservative, evidence-first approach.
 
-- **Backend-held API key:** The TinyFish key is stored in `server/.env` and sent to TinyFish from the backend.
+- **Backend-held API keys:** TinyFish and Google Safe Browsing keys are stored in `server/.env` and used only by backend clients.
 - **No key in the extension:** The extension must never receive the API key.
+- **Provider separation:** Google threat matches are distinct from TinyFish search relevance.
+- **Limited lookup:** Google Safe Browsing checks only the submitted URL; an unavailable or no-match response does not establish safety.
 - **Input validation:** Investigation URLs are validated before searching.
 - **Safe source rendering:** Titles, snippets, and explanations should be rendered as text rather than trusted HTML.
 - **Explicit user action:** The user initiates an investigation from the popup.
