@@ -7,22 +7,26 @@
     <link rel="stylesheet" href="popup.css">
     <script src="popup.js" defer></script>
   </head>
-<body>
-    <main class="popup">
-      <header class="brand">
-        <span class="brand-mark" aria-hidden="true">C</span>
-        <div>
-          <p class="eyebrow">WEB3 SITE CHECK</p>
-          <h1>ChainShield</h1>
+  <body>
+    <div class="onboarding-container" id="onboarding-container">
+      <!-- Brand header shown on all pages -->
+      <header class="brand-header" id="brand-header" aria-label="ChainShield header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">C</span>
+          <div class="brand-text">
+            <p class="eyebrow">WEB3 SITE CHECK</p>
+            <h1>ChainShield</h1>
+          </div>
         </div>
+        <button class="btn-secondary" id="skip-onboarding" aria-label="Skip onboarding and open investigation">
+          Skip
+        </button>
       </header>
 
-      <p class="intro">Investigate a website with evidence, not guesswork.</p>
-
       <!-- Onboarding steps -->
-      <div class="onboarding" id="onboarding" aria-label="ChainShield onboarding">
-        <!-- Step 1 -->
-        <div class="onboarding-step active" id="step-1" role="region" aria-label="Step 1: Understand the website">
+      <main class="onboarding-steps" id="onboarding-steps" aria-label="ChainShield onboarding">
+        <!-- Step 1: Know what you're opening -->
+        <div class="onboarding-step active" id="step-1" role="region" aria-label="Step 1: Know what you're opening">
           <div class="step-header">
             <span class="step-eyebrow">STEP 1 OF 4</span>
           </div>
@@ -34,10 +38,9 @@
           </p>
 
           <div class="step-visual">
-            <!-- Browser security illustration -->
             <svg viewBox="0 0 200 140" aria-hidden="true">
               <rect width="200" height="140" rx="8" fill="#1e212a" />
-              <circle cx="80" cy="55" r="8" fill="#a855f7" />
+              <circle cx="80" cy="55" r="8" fill="#167568" />
               <circle cx="120" cy="80" r="6" fill="#3b82f6" />
               <circle cx="60" cy="30" r="5" fill="#10b981" />
               <circle cx="140" cy="40" r="5" fill="#f59e0b" />
@@ -46,7 +49,7 @@
               <text x="100" y="85" text-anchor="middle" fill="#6b7c84" font-size="8">threat rep</text>
               <text x="100" y="95" text-anchor="middle" fill="#6b7c84" font-size="8">url heuristics</text>
             </svg>
-            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); pointer-events:none; font-size:10px;">
+            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--on-muted); pointer-events:none; font-size:10px;">
               Illustration shows independent signals ChainShield examines
             </div>
           </div>
@@ -57,8 +60,8 @@
           </div>
         </div>
 
-        <!-- Step 2 -->
-        <div class="onboarding-step" id="step-2" role="region" aria-label="Step 2: Understand the investigation">
+        <!-- Step 2: Look beyond the surface -->
+        <div class="onboarding-step" id="step-2" role="region" aria-label="Step 2: Look beyond the surface">
           <div class="step-header">
             <span class="step-eyebrow">STEP 2 OF 4</span>
           </div>
@@ -117,7 +120,7 @@
               <path d="M15 30 L45 30 L45 70 M15 70 L45 70" stroke="#6b7c84" stroke-width="1" fill="none" />
               <path d="M165 90 L195 90 L195 150 M165 150 L195 150" stroke="#6b7c84" stroke-width="1" fill="none" />
             </svg>
-            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); pointer-events:none; font-size:10px;">Investigation flow: web + optional Web3</div>
+            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--on-muted); pointer-events:none; font-size:10px;">Investigation flow: web + optional Web3</div>
           </div>
 
           <div class="step-nav">
@@ -126,8 +129,8 @@
           </div>
         </div>
 
-        <!-- Step 3 -->
-        <div class="onboarding-step" id="step-3" role="region" aria-label="Step 3: Understand Web3 risks">
+        <!-- Step 3: Look deeper into Web3 -->
+        <div class="onboarding-step" id="step-3" role="region" aria-label="Step 3: Look deeper into Web3">
           <div class="step-header">
             <span class="step-eyebrow">STEP 3 OF 4</span>
           </div>
@@ -173,8 +176,8 @@
             <svg viewBox="0 0 200 180" aria-hidden="true">
               <rect width="200" height="180" rx="8" fill="#1e212a" />
               <!-- Example address -->
-              <text x="15" y="30" fill="#98a2a9" font-size="11" font-family="monospace">0xA3f5...7c21</text>
-              <text x="15" y="50" fill="#98a2a9" font-size="11" font-family="monospace">Ethereum Mainnet</text>
+              <text x="15" y="30" fill="#6b7c84" font-size="11" font-family="monospace">0xA3f5...7c21</text>
+              <text x="15" y="50" fill="#6b7c84" font-size="11" font-family="monospace">Ethereum Mainnet</text>
               <!-- Bytecode observation -->
               <circle cx="80" cy="65" r="5" fill="#3b82f6" />
               <text x="88" y="68" fill="#6b7c84" font-size="10">bytecode</text>
@@ -192,7 +195,7 @@
               <!-- Warning -->
               <text x="15" y="185" fill="#f59e0b" font-size="10" font-weight="600">⚡ Capability detection is not a safety verdict</text>
             </svg>
-            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); pointer-events:none; font-size:10px;">Illustrative: contract inspection concepts</div>
+            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--on-muted); pointer-events:none; font-size:10px;">Illustrative: contract inspection concepts</div>
           </div>
 
           <div class="step-nav">
@@ -201,13 +204,13 @@
           </div>
         </div>
 
-        <!-- Step 4 -->
-        <div class="onboarding-step" id="step-4" role="region" aria-label="Step 4: Start using ChainShield">
+        <!-- Step 4: Investigate before you interact -->
+        <div class="onboarding-step" id="step-4" role="region" aria-label="Step 4: Investigate before you interact">
           <div class="step-header">
             <span class="step-eyebrow">STEP 4 OF 4</span>
           </div>
 
-          <h2 class="step-heading">Make your next click an informed one.</h2>
+          <h2 class="step-heading">Investigate before you interact.</h2>
 
           <p class="step-supporting">
             Open a website, launch ChainShield, and investigate its signals. Add an Ethereum contract address when you want to inspect on-chain details.
@@ -215,22 +218,22 @@
 
           <div class="step4-actions">
             <div class="step4-action-box">
-              <span style="color:var(--muted-soft); font-size:11px; line-height:1.5;">1</span>
-              <span style="color:#e8edf5; font-size:12px; font-weight:600;">Open a website you want to investigate.</span>
+              <span style="color:var(--on-muted); font-size:11px; line-height:1.5;">1</span>
+              <span style="color:var(--on-primary); font-size:12px; font-weight:600;">Open a website you want to investigate.</span>
             </div>
             <div class="step4-action-box">
-              <span style="color:var(--muted-soft); font-size:11px; line-height:1.5;">2</span>
-              <span style="color:#e8edf5; font-size:12px; font-weight:600;">Open ChainShield from Chrome's Extensions menu.</span>
+              <span style="color:var(--on-muted); font-size:11px; line-height:1.5;">2</span>
+              <span style="color:var(--on-primary); font-size:12px; font-weight:600;">Open ChainShield from Chrome's Extensions menu.</span>
             </div>
             <div class="step4-action-box">
-              <span style="color:var(--muted-soft); font-size:11px; line-height:1.5;">3</span>
-              <span style="color:#e8edf5; font-size:12px; font-weight:600;">Review the evidence and any incomplete checks before deciding what to do next.</span>
+              <span style="color:var(--on-muted); font-size:11px; line-height:1.5;">3</span>
+              <span style="color:var(--on-primary); font-size:12px; font-weight:600;">Review the evidence and any incomplete checks before deciding what to do next.</span>
             </div>
           </div>
 
           <div class="step-nav step4-nav">
             <button class="step4-action-btn secondary" data-step="3" aria-label="Go back to step 3">Review how it works</button>
-            <button class="step4-action-btn" data-onboarding-complete="true" aria-label="Open ChainShield and start investigating">Open ChainShield</button>
+            <button class="step4-action-btn" data-onboarding-complete="true" aria-label="Open investigation workspace">Open investigation workspace</button>
           </div>
 
           <p class="step4-security-note">
@@ -240,7 +243,7 @@
           <div class="step-visual">
             <svg viewBox="0 0 200 140" aria-hidden="true">
               <rect width="200" height="140" rx="8" fill="#1e212a" />
-              <!-- Popup mockup -->
+              <!-- Mockup of the investigation workspace -->
               <path d="M20 20 L180 20 L180 120 L20 120 Z" stroke="#3b82f6" stroke-width="1" fill="#0f172a" />
               <rect x="30" y="30" width="80" height="40" rx="6" stroke="#167568" stroke-width="1" fill="transparent" />
               <text x="70" y="48" text-anchor="middle" fill="#6b7c84" font-size="9">Website</text>
@@ -252,24 +255,120 @@
               <text x="25" y="75" text-end fill="#6b7c84" font-size="9">Optional</text>
               <text x="175" y="75" text-start fill="#6b7c84" font-size="9">field</text>
             </svg>
-            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); pointer-events:none; font-size:10px;">ILLUSTRATIVE PREVIEW of ChainShield popup</div>
+            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--on-muted); pointer-events:none; font-size:10px;">ILLUSTRATIVE PREVIEW of ChainShield workspace</div>
           </div>
 
           <div class="step-nav step4-nav">
             <button class="step4-action-btn secondary" data-step="3" aria-label="Go back to step 3">Review how it works</button>
-            <button class="step4-action-btn" data-onboarding-complete="true" aria-label="Open ChainShield and start investigating">Open ChainShield</button>
+            <button class="step4-action-btn" data-onboarding-complete="true" aria-label="Open investigation workspace">Open investigation workspace</button>
           </div>
 
           <p class="step4-security-note">
             <strong>ChainShield provides investigative evidence, not a guarantee of safety.</strong> Never share your wallet recovery phrase or private keys.
           </p>
         </div>
-      </div>
+      </main>
 
-      <!-- Investigate CTA shown after onboarding -->
-      <div class="investigate-cta" id="investigate-cta" hidden>
-        <button class="button">Investigate this website</button>
+      <!-- Investigation workspace shown after onboarding -->
+      <div class="investigation-workspace" id="investigation-workspace" hidden aria-label="ChainShield investigation workspace">
+        <!-- Header -->
+        <header class="brand-header" id="workspace-header">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">C</span>
+            <div class="brand-text">
+              <p class="eyebrow">WEB3 SITE CHECK</p>
+              <h1>ChainShield</h1>
+            </div>
+          </div>
+          <button class="btn-secondary" id="close-workspace" aria-label="Close ChainShield workspace">Close</button>
+        </header>
+
+        <!-- Workspace shell -->
+        <main class="workspace-shell" id="workspace-shell">
+          <!-- Hero / form section -->
+          <section class="workspace-hero">
+            <h2 class="workspace-heading">Investigate before you interact.</h2>
+            <p class="workspace-subtitle">Enter a website URL and optionally a smart‑contract address to review evidence and limitations.</p>
+
+            <form class="workspace-form" id="investigation-form">
+              <div class="form-group">
+                <label for="url-input" class="form-label">Website URL</label>
+                <input type="url" id="url-input" name="url" class="form-input" placeholder="https://example.com" required autocomplete="off">
+              </div>
+
+              <div class="form-group">
+                <label for="contract-input" class="form-label">Optional Ethereum contract address</label>
+                <input type="text" id="contract-input" name="contractAddress" class="form-input" placeholder="0x… (40 hexadecimal characters)" autocomplete="off" spellcheck="false">
+              </div>
+
+              <button type="submit" class="btn-primary">Investigate website</button>
+            </form>
+
+            <p class="workspace-note">ChainShield provides investigative evidence, not a guarantee of safety. Never share your wallet recovery phrase or private keys.</p>
+          </section>
+
+          <!-- Results area -->
+          <section class="workspace-results" id="workspace-results" hidden aria-labelledby="results-heading">
+            <h3 id="results-heading">Investigation results</h3>
+
+            <div class="results-summary" id="results-summary" hidden></div>
+
+            <!-- Website intelligence -->
+            <section class="results-section" id="results-website" hidden>
+              <h4>Website intelligence</h4>
+              <div class="results-status" id="results-website-status"></div>
+              <ul class="results-evidence" id="results-website-evidence"></ul>
+            </section>
+
+            <!-- Google Safe Browsing -->
+            <section class="results-section" id="results-sb" hidden>
+              <h4>Google Safe Browsing</h4>
+              <div class="results-status" id="results-sb-status"></div>
+              <ul class="results-evidence" id="results-sb-evidence"></ul>
+            </section>
+
+            <!-- URL structure analysis -->
+            <section class="results-section" id="results-url" hidden>
+              <h4>URL structure analysis</h4>
+              <div class="results-status" id="results-url-status"></div>
+              <ul class="results-evidence" id="results-url-evidence"></ul>
+            </section>
+
+            <!-- Ethereum RPC assessment -->
+            <section class="results-section" id="results-ethereum" hidden>
+              <h4>Ethereum RPC assessment</h4>
+              <div class="results-status" id="results-ethereum-status"></div>
+            </section>
+
+            <!-- Etherscan / contract analysis -->
+            <section class="results-section" id="results-contract" hidden>
+              <h4>Contract analysis</h4>
+              <div class="results-status" id="results-contract-status"></div>
+              <ul class="results-evidence" id="results-contract-evidence"></ul>
+            </section>
+          </section>
+        </main>
       </div>
-    </main>
-</body>
+    </div>
+
+    <script>
+    // // When the onboarding is complete, we'll navigate to the workspace
+    // The popup.js handles this — this HTML just provides the structure.
+    // The investigation-form submit is handled by popup.js which calls the backend.
+    // 
+    // Key elements referenced in popup.js (ensure IDs match):
+    // - investigation-form (submit handler)
+    // - url-input, contract-input
+    // - results-website-status, results-website-evidence
+    // - results-sb-status, results-sb-evidence
+    // - results-url-status, results-url-evidence
+    // - results-ethereum-status
+    // - results-contract-status, results-contract-evidence
+    // - workspace-shell, workspace-hero, workspace-results
+    // - workspace-heading, workspace-subtitle
+    //
+    // The onboarding JS (same popup.js) manages step navigation and the
+    // 'Open investigation workspace' CTA in step 4.
+    </script>
+  </body>
 </html>
