@@ -29,6 +29,8 @@ const domainNote = document.querySelector("#domain-note");
 const evidenceGroups = document.querySelector("#evidence-groups");
 const threatAssessment = document.querySelector("#threat-assessment");
 const threatDetails = document.querySelector("#threat-details");
+const urlSignals = document.querySelector("#url-signals");
+const urlSignalDetails = document.querySelector("#url-signal-details");
 
 function setMessage(text, state = "") {
   message.textContent = text;
@@ -182,7 +184,66 @@ function displayResult(data) {
   }
 
   displayThreatAssessment(data.threatAssessment);
+  displayUrlSignals(data.urlSignals);
   result.hidden = false;
+}
+
+function displayUrlSignals(assessment) {
+  urlSignalDetails.replaceChildren();
+  urlSignals.hidden = false;
+
+  const findings =
+    assessment && typeof assessment === "object" && Array.isArray(assessment.findings)
+      ? assessment.findings.filter(
+          (finding) => finding && typeof finding === "object"
+        )
+      : [];
+
+  if (findings.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "url-signal-empty";
+    empty.textContent = "No structural URL signals were found.";
+    urlSignalDetails.append(empty);
+    return;
+  }
+
+  for (const finding of findings) {
+    const item = document.createElement("div");
+    item.className = "url-signal-item";
+
+    const heading = document.createElement("p");
+    heading.className = "url-signal-heading";
+    const ruleName =
+      typeof finding.ruleId === "string" ? finding.ruleId.replace(/_/g, " ") : "URL signal";
+    const severity =
+      typeof finding.severity === "string" ? finding.severity : "review";
+    heading.textContent = `${ruleName} (${severity})`;
+    item.append(heading);
+
+    if (typeof finding.explanation === "string" && finding.explanation.trim() !== "") {
+      const explanation = document.createElement("p");
+      explanation.className = "url-signal-explanation";
+      explanation.textContent = finding.explanation.trim();
+      item.append(explanation);
+    }
+
+    if (
+      finding.observedFeature &&
+      typeof finding.observedFeature === "object" &&
+      typeof finding.observedFeature.value === "string"
+    ) {
+      const observed = document.createElement("p");
+      observed.className = "url-signal-observed";
+      const label =
+        typeof finding.observedFeature.label === "string"
+          ? finding.observedFeature.label
+          : "Observed feature";
+      observed.textContent = `${label}: ${finding.observedFeature.value}`;
+      item.append(observed);
+    }
+
+    urlSignalDetails.append(item);
+  }
 }
 
 function displayThreatAssessment(assessment) {
@@ -274,6 +335,7 @@ button.addEventListener("click", async () => {
   button.disabled = true;
   result.hidden = true;
   threatAssessment.hidden = true;
+  urlSignals.hidden = true;
   domainLabel.textContent = "";
   setMessage("Checking the active tab…");
 

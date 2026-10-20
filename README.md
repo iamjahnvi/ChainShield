@@ -365,6 +365,9 @@ The following is an illustrative example of the response structure, not a claim 
         "matches": []
       }
     ]
+  },
+  "urlSignals": {
+    "findings": []
   }
 }
 ```
@@ -374,6 +377,8 @@ The actual evidence, summary, and status depend on the backend implementation an
 `threatAssessment` is separate from TinyFish evidence and may have `reported`, `no_match`, `incomplete`, or `unavailable` status. A `no_match` means only that Google Safe Browsing returned no match for the submitted URL; it is not a safety verdict. An unavailable provider is never represented as a clean result.
 
 Google requires qualifying language for reported threats, a linked “Advisory provided by Google” attribution, and notice that results can include false positives and false negatives. The popup displays these notices. Review the current [Safe Browsing usage requirements](https://developers.google.com/safe-browsing/v4/usage-limits) before using this integration beyond non-commercial development.
+
+`urlSignals` is a separate, local heuristic analysis of the submitted URL structure. It can report an IP-address hostname, a punycode hostname label, or at least four labels before the final two hostname labels. These are low-severity review signals, not confirmed threat intelligence; an empty findings list does not mean the website is safe. This analysis does not visit the submitted website.
 
 ### Response fields
 
@@ -386,6 +391,7 @@ Google requires qualifying language for reported threats, a linked “Advisory p
 | `investigationType` | Identifies the investigation as a web search. |
 | `demo` | Indicates whether the response is a demo response. |
 | `threatAssessment` | Separate Google Safe Browsing lookup result; it does not use TinyFish relevance as a threat score. |
+| `urlSignals` | Separate structural URL heuristic findings; these do not change the Google Safe Browsing status. |
 
 Evidence items may contain `title`, `url`, `snippet`, `source`, `position`, `siteName`, `category`, and `categoryReason`, depending on the available upstream data and normalization.
 
@@ -529,7 +535,9 @@ ChainShield follows a conservative, evidence-first approach.
 - **Backend-held API keys:** TinyFish and Google Safe Browsing keys are stored in `server/.env` and used only by backend clients.
 - **No key in the extension:** The extension must never receive the API key.
 - **Provider separation:** Google threat matches are distinct from TinyFish search relevance.
+- **Heuristic separation:** Structural URL signals are displayed separately from provider findings and never establish that a website is malicious.
 - **Limited lookup:** Google Safe Browsing checks only the submitted URL; an unavailable or no-match response does not establish safety.
+- **No target fetching for heuristics:** URL structure is analyzed locally from the submitted URL; the heuristic module does not visit the target or follow redirects.
 - **Input validation:** Investigation URLs are validated before searching.
 - **Safe source rendering:** Titles, snippets, and explanations should be rendered as text rather than trusted HTML.
 - **Explicit user action:** The user initiates an investigation from the popup.
@@ -576,6 +584,7 @@ Replace `13528` with the PID shown on your machine. Inspect the process before s
 
 - Search results depend on the upstream TinyFish Search API response.
 - The system does not perform a full malware scan, phishing-page analysis, smart-contract audit, or on-chain investigation.
+- URL heuristics currently cover only IP-address hostnames, explicit punycode labels, and unusually deep hostnames. They do not inspect page content, redirects, linked domains, or typosquatting.
 - Classification is heuristic and can make mistakes.
 - Search-result excerpts are not independently verified facts.
 - No search results do not establish safety.
