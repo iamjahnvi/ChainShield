@@ -1,187 +1,330 @@
-# ChainShield 🛡️
+# 🛡️ ChainShield
 
-**Evidence-based website and Web3 threat intelligence, directly from your Chrome toolbar.**
+<p align="center">
+  <strong>Investigate the website. Inspect the evidence. Understand the contract.</strong>
+</p>
 
-ChainShield is a Chrome Extension (Manifest V3) connected to a local Node.js and Express backend. It investigates a user-selected website by searching for publicly available information through the TinyFish Search API, then organizes the returned sources into understandable evidence categories.
+<p align="center">
+  An evidence-driven Chrome security extension that combines web threat intelligence, URL analysis, and on-chain smart-contract inspection in one investigation workflow.
+</p>
 
-Instead of making unsupported claims about whether a website is safe or malicious, ChainShield helps users examine relevant public information, understand why a source was included, and investigate further.
+<p align="center">
+  <img src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white" alt="Chrome Manifest V3" />
+  <img src="https://img.shields.io/badge/Backend-Node.js%20%7C%20Express-339933?logo=nodedotjs&logoColor=white" alt="Node.js and Express" />
+  <img src="https://img.shields.io/badge/Web%20Intelligence-TinyFish-111827" alt="TinyFish integration" />
+  <img src="https://img.shields.io/badge/Web3-Ethereum-627EEA?logo=ethereum&logoColor=white" alt="Ethereum" />
+  <img src="https://img.shields.io/badge/Analysis-Read--Only-0F766E" alt="Read-only analysis" />
+</p>
 
-> **Core principle:** Evidence is not a verdict. A relevant search result does not prove malicious activity, and the absence of evidence does not mean a website is safe.
-
----
-
-## Contents
-
-1. [The problem](#the-problem)
-2. [How ChainShield works](#how-chainshield-works)
-3. [Architecture](#architecture)
-4. [Technology stack](#technology-stack)
-5. [Quick start](#quick-start)
-6. [Configuration](#configuration)
-7. [API reference](#api-reference)
-8. [Evidence classification](#evidence-classification)
-9. [Project structure](#project-structure)
-10. [Testing](#testing)
-11. [Security and privacy](#security-and-privacy)
-12. [Troubleshooting](#troubleshooting)
-13. [Current limitations](#current-limitations)
-14. [Future scope](#future-scope)
+<p align="center">
+  <a href="#-how-chainshield-works">Architecture</a> ·
+  <a href="#-tinyfish-integration">TinyFish Integration</a> ·
+  <a href="#-web3-and-smart-contract-analysis">Web3 Analysis</a> ·
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-security-model-and-limitations">Security Model</a>
+</p>
 
 ---
 
 ## The problem
 
-Websites associated with phishing, impersonation, scams, and fraud can be difficult to evaluate. Users may encounter unfamiliar domains, misleading search results, or security claims without knowing which sources are relevant.
+A website can look legitimate while its domain, reputation, or associated smart contracts deserve closer inspection. Traditional browsing separates these signals across search engines, threat-intelligence services, blockchain explorers, and RPC providers.
 
-| Challenge | Why it matters |
-|---|---|
-| Fragmented information | Relevant reports and discussions may be scattered across public websites. |
-| Misleading search results | A search result mentioning a security topic may have nothing to do with the investigated domain. |
-| Unsupported verdicts | A website should not be labelled malicious merely because its name appears in a search result. |
-| Difficult investigation workflows | Users often need to open multiple tabs and manually compare sources. |
+ChainShield brings these independent sources into a single, user-initiated investigation.
 
-ChainShield provides a small, accessible starting point: investigate the current website, review publicly available search results, and see why each result was categorized.
+**ChainShield is designed around one principle: security decisions should be supported by evidence, not confident-looking guesses.**
 
-## How ChainShield works
+It combines:
 
-### User flow
+- **Web intelligence:** TinyFish Search retrieves publicly available search evidence relevant to the investigated hostname.
+- **Threat reputation:** Google Safe Browsing checks the submitted URL against its threat intelligence.
+- **URL structure analysis:** Local heuristics identify selected suspicious hostname patterns.
+- **Blockchain inspection:** Ethereum JSON-RPC retrieves network metadata, the latest block number, and contract bytecode presence.
+- **Verified-source analysis:** Etherscan API V2 provides verified contract source metadata and supports bounded proxy-chain inspection on Ethereum Mainnet.
 
-1. Open a regular website using Google Chrome.
-2. Open the ChainShield extension from the Chrome toolbar.
-3. Select **Investigate this website**.
-4. The extension reads the current tab's URL and sends it to the local backend.
-5. The backend validates the URL and extracts its hostname.
-6. The backend builds a focused search query containing the hostname and security-related terms.
-7. TinyFish Search returns public search results.
-8. ChainShield normalizes, deduplicates, and classifies the returned evidence.
-9. The extension displays grouped results and explanations to help the user assess their relevance.
+Each layer has a separate responsibility. A search result is not a threat verdict, bytecode presence is not a security guarantee, and verified source code is not proof that a contract is safe.
 
-### Investigation flow
+## ✨ Core capabilities
 
-```mermaid
-flowchart TD
-    A["User opens a website"] --> B["Open ChainShield popup"]
-    B --> C["Click Investigate this website"]
-    C --> D["Read active tab URL"]
-    D --> E{"HTTP or HTTPS URL?"}
-    E -- No --> F["Show unsupported-page message"]
-    E -- Yes --> G["POST /api/investigations"]
-    G --> H["Validate URL and extract hostname"]
-    H --> I["Build focused security search query"]
-    I --> J["TinyFish Search API"]
-    J --> K["Normalize search response"]
-    K --> L["Deduplicate and classify evidence"]
-    L --> M{"Search outcome"}
-    M -- "Sources returned" --> N["Display categorized evidence"]
-    M -- "No sources" --> O["Explain that no evidence was found"]
-    M -- "Upstream or configuration error" --> P["Show an error message"]
-    N --> Q["User reviews sources"]
-    O --> Q
-```
-
-The flow describes the intended investigation process. A successful HTTP response alone does not guarantee that a live search succeeded; the API status and returned investigation details must also be checked.
+| Capability | What ChainShield does | What it does not claim |
+|---|---|---|
+| TinyFish Search | Retrieves public search results relevant to a hostname and security-focused query | Does not independently prove a website is malicious |
+| Google Safe Browsing | Checks the submitted URL for reported threats | A no-match response does not prove safety |
+| URL heuristics | Detects selected patterns such as IP-address hostnames, punycode labels, and unusually deep subdomains | Does not establish malicious intent |
+| Ethereum JSON-RPC | Reads chain ID, latest block number, and bytecode at a supplied address | Does not determine whether an address is malicious |
+| Etherscan source analysis | Retrieves verified-source information and examines selected capability indicators | Does not perform a complete formal audit |
+| Proxy-chain traversal | Follows validated implementation metadata with a bounded traversal depth and cycle detection | Does not resolve every possible proxy architecture |
+| Failure isolation | Keeps independent assessment results available when another provider fails | Does not turn a failed check into a clean result |
 
 ---
 
-## Architecture
+## 🧭 How ChainShield works
 
-### System architecture
+A normal website investigation and a smart-contract investigation are related, but distinct.
+
+### Website investigation
+
+1. The user opens a website in Chrome and explicitly starts an investigation.
+2. The extension obtains the active tab's URL and sends it to the local Express backend.
+3. The backend validates the submitted URL before passing it to the relevant analysis modules.
+4. TinyFish Search, Google Safe Browsing, and local URL heuristics perform their respective checks.
+5. The backend normalizes and separates their results rather than treating all signals as interchangeable.
+6. The popup presents the returned evidence and assessment details for the user to review.
+
+### Smart-contract investigation
+
+1. The user optionally supplies an Ethereum contract address.
+2. The backend validates its format before making contract-related provider calls.
+3. Ethereum JSON-RPC retrieves the chain ID, latest block number, and bytecode at the requested address.
+4. When supported by the reported network and configured Etherscan credentials, the source analyzer retrieves verified-source metadata.
+5. Proxy metadata is followed through a bounded implementation chain, with address validation and cycle detection.
+6. Selected source patterns are reported as capability indicators with analysis status and evidence.
+7. Incomplete, unsupported, and unavailable results remain distinguishable from completed analysis.
+
+The contract address is an explicit input. Providing an address does not establish that the investigated website owns or uses that contract.
+
+## 🏗️ System architecture
 
 ```mermaid
-flowchart LR
-    subgraph Browser["Google Chrome"]
-        TAB["Active website tab"]
-        EXT["ChainShield popup"]
-        UI["Evidence categories and explanations"]
-        TAB --> EXT
-        EXT --> UI
+flowchart TB
+    USER["User"]
+    subgraph CHROME["Chrome · Manifest V3"]
+        TAB["Active browser tab"]
+        POPUP["ChainShield popup"]
+        UI["Investigation results"]
+        TAB --> POPUP
+        POPUP --> UI
     end
 
-    subgraph Backend["Local Node.js backend"]
-        API["Express API"]
-        VALIDATE["URL validation"]
-        SEARCH["TinyFish search client"]
-        CLASSIFY["Normalization, deduplication and classification"]
+    subgraph BACKEND["Node.js + Express backend"]
+        API["Investigation API"]
+        VALIDATE["URL and contract-address validation"]
+        ORCHESTRATOR["Investigation orchestration"]
+
+        TINY["TinyFish Search client"]
+        SAFE["Google Safe Browsing client"]
+        HEURISTICS["Local URL heuristics"]
+
+        RPC["Ethereum JSON-RPC client"]
+        ETHERSCAN["Etherscan V2 source analyzer"]
+        PROXY["Bounded proxy-chain traversal"]
+        CLASSIFY["Evidence normalization and assessment"]
 
         API --> VALIDATE
-        VALIDATE --> SEARCH
-        SEARCH --> CLASSIFY
+        VALIDATE --> ORCHESTRATOR
+
+        ORCHESTRATOR --> TINY
+        ORCHESTRATOR --> SAFE
+        ORCHESTRATOR --> HEURISTICS
+        ORCHESTRATOR -. "When contract address supplied" .-> RPC
+        RPC -. "Supported network and configuration" .-> ETHERSCAN
+        ETHERSCAN --> PROXY
+
+        TINY --> CLASSIFY
+        SAFE --> CLASSIFY
+        HEURISTICS --> CLASSIFY
+        RPC --> CLASSIFY
+        PROXY --> CLASSIFY
     end
 
     TF["TinyFish Search API"]
-    PUBLIC["Public search results"]
+    GSB["Google Safe Browsing API"]
+    ETH["Ethereum JSON-RPC provider"]
+    ES["Etherscan API V2"]
 
-    EXT -->|"POST /api/investigations"| API
-    SEARCH -->|"HTTPS request with API key"| TF
-    TF --> PUBLIC
-    PUBLIC --> SEARCH
-    CLASSIFY -->|"JSON response"| EXT
-    EXT --> UI
+    USER --> TAB
+    POPUP -->|"POST /api/investigations"| API
+    TINY <-->|"HTTPS search request / results"| TF
+    SAFE <-->|"HTTPS URL lookup / result"| GSB
+    RPC <-->|"Read-only JSON-RPC"| ETH
+    ETHERSCAN <-->|"Source and proxy metadata"| ES
+    CLASSIFY -->|"Structured JSON response"| UI
 ```
 
-### Component responsibilities
+### Architectural decisions
 
-| Component | Responsibility |
-|---|---|
-| Chrome extension | Reads the active tab after the user initiates an investigation and displays the results. |
-| Express API | Accepts investigation requests, validates input, and returns structured JSON. |
-| TinyFish integration | Builds a focused search query and requests public search results. |
-| Classification module | Normalizes evidence, removes duplicate results conservatively, and assigns categories with explanations. |
-| Test suite | Checks API behavior, classification rules, validation, and mocked upstream responses. |
+- **Independent signal sources:** Search relevance, threat-reputation results, URL heuristics, RPC observations, and source-analysis indicators remain conceptually separate.
+- **Optional Web3 analysis:** A website-only investigation does not require a contract address.
+- **Provider failure isolation:** An upstream failure should not erase valid findings from unrelated checks.
+- **Bounded external calls:** Provider requests use validation, timeouts or response-size limits where implemented, and controlled error handling.
+- **Evidence-first reporting:** Unavailable or incomplete analysis is not silently converted into a clean security result.
+- **Read-only blockchain access:** ChainShield does not connect to a user's wallet, sign transactions, or submit transactions.
 
-### Request and response sequence
+---
+
+## 🔎 TinyFish integration
+
+TinyFish is a core part of ChainShield's web-intelligence layer. It allows the backend to retrieve publicly available search evidence related to the website being investigated.
+
+Instead of treating the presence of a domain in a search result as proof of malicious activity, ChainShield uses the results as **investigative evidence that needs context**.
+
+### Integration workflow
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant Popup as Chrome Popup
+    participant Popup as Chrome Extension
     participant API as Express Backend
-    participant Search as TinyFish Client
-    participant TF as TinyFish Search API
-    participant Classifier as Evidence Classifier
+    participant TFClient as TinyFish Client
+    participant TinyFish as TinyFish Search API
+    participant Classifier as Evidence Processing
 
     User->>Popup: Investigate current website
-    Popup->>API: POST /api/investigations {url}
+    Popup->>API: POST /api/investigations
     API->>API: Validate URL and extract hostname
-    API->>Search: Search for hostname and security terms
-    Search->>TF: Authenticated search request
-    TF-->>Search: Search response
-    Search->>Search: Validate and normalize response
-    Search-->>Classifier: Normalized evidence
+    API->>TFClient: Build hostname-focused search query
+    TFClient->>TinyFish: Authenticated HTTPS search request
+    TinyFish-->>TFClient: Public search results
+    TFClient->>TFClient: Validate and normalize response
+    TFClient-->>Classifier: Normalized search evidence
     Classifier->>Classifier: Deduplicate and classify
-    Classifier-->>API: Categorized evidence
-    API-->>Popup: JSON investigation response
-    Popup-->>User: Results, explanations or error
+    Classifier-->>API: Structured evidence
+    API-->>Popup: Investigation response
+    Popup-->>User: Evidence and explanations
 ```
 
-If validation fails, the upstream service fails, or the response is malformed, the backend should return an appropriate error rather than inventing evidence.
+### What TinyFish contributes
+
+| Stage | Responsibility |
+|---|---|
+| Query construction | Uses the investigated hostname with security-focused search terms |
+| Search execution | Calls the configured TinyFish Search API from the backend |
+| Response handling | Validates and normalizes the provider response |
+| Evidence processing | Deduplicates results and assigns relevance categories |
+| Presentation | Returns structured results for display in the extension |
+
+### Evidence classification
+
+ChainShield separates returned search results into three categories:
+
+| Category | Meaning |
+|---|---|
+| `domain_specific` | The result URL or relevant text is associated with the investigated hostname |
+| `general_information` | The result provides broader security information without clear domain-specific evidence |
+| `irrelevant_or_unclear` | The relationship to the investigated hostname is weak, unclear, or unrelated |
+
+These are **relevance categories, not threat verdicts**.
+
+A domain-specific result may be inaccurate, harmless, outdated, or misleading. Conversely, a fraudulent website may have little or no searchable public history.
+
+### Why the integration matters
+
+TinyFish provides a way to gather public web evidence as part of an investigation instead of relying exclusively on hard-coded hostname patterns.
+
+ChainShield combines that evidence with independent reputation and structural checks, giving the user a broader context for manual investigation.
+
+**Scope clarification:** ChainShield currently uses TinyFish Search for this workflow. The implementation should not be confused with a fully autonomous browser agent, continuous website monitoring, or a general-purpose crawler.
 
 ---
 
-## Technology stack
+## ⛓️ Web3 and smart-contract analysis
 
-| Layer | Technology | Purpose |
+ChainShield extends its investigation beyond the website itself when a user supplies an Ethereum contract address.
+
+This layer is deliberately read-only and separates basic on-chain observations from source-code capability analysis.
+
+### 1. Ethereum JSON-RPC
+
+The backend uses the configured `ETH_RPC_URL` endpoint to perform three read-only JSON-RPC calls:
+
+| RPC method | Purpose |
+|---|---|
+| `eth_chainId` | Identifies the connected blockchain network |
+| `eth_blockNumber` | Retrieves the latest block number reported by the provider |
+| `eth_getCode` | Checks whether bytecode is returned for the supplied address at the requested block reference |
+
+The bytecode observation is classified as `no_bytecode` or `bytecode_present`.
+
+Neither outcome establishes whether an address is malicious. An address with no bytecode may be an externally owned account, an undeployed address, or another address without code at that block. A contract with bytecode can still contain dangerous behavior.
+
+### 2. Verified-source analysis through Etherscan
+
+When the network and configuration support the lookup, ChainShield uses Etherscan API V2 to retrieve verified-source information.
+
+The analyzer looks for selected source-code indicators associated with capabilities such as:
+
+- Privileged minting
+- Pausing functionality
+- Blacklist or denylist functionality
+- Upgradeability
+- Privileged administration
+
+These indicators are heuristic. Finding a function or pattern does not, by itself, establish that the capability is exploitable, malicious, or improperly controlled.
+
+### 3. Bounded proxy-chain traversal
+
+Proxy contracts can delegate behavior to separate implementation contracts. Inspecting only the initial address may therefore provide an incomplete picture.
+
+ChainShield follows validated implementation metadata returned by Etherscan, with a maximum of three implementation hops after the submitted contract.
+
+```mermaid
+flowchart TD
+    A["Submitted contract address"] --> B["Retrieve source and proxy metadata"]
+    B --> C{"Verified source and valid metadata?"}
+    C -- "Yes" --> D["Record layer and inspect capabilities"]
+    C -- "No" --> E["Record incomplete or unavailable status"]
+    D --> F{"Valid implementation address?"}
+    F -- "No" --> G["Finish traversal"]
+    F -- "Yes" --> H{"Cycle detected or hop limit reached?"}
+    H -- "Yes" --> I["Stop safely and preserve chain status"]
+    H -- "No" --> J["Inspect next implementation"]
+    J --> B
+    E --> K["Return qualified result"]
+    G --> K
+    I --> K
+```
+
+The traversal includes cycle detection, address validation, and explicit incomplete states when a layer cannot be fully inspected. The depth limit bounds the investigation; it does not guarantee that every proxy architecture or dependency has been discovered.
+
+### 4. Independent assessment status
+
+ChainShield distinguishes states such as:
+
+| Status | Interpretation |
+|---|---|
+| `not_requested` | No contract address was supplied |
+| `available` | The relevant assessment completed with usable data |
+| `incomplete` | Some analysis was possible, but one or more layers or checks remain unresolved |
+| `unavailable` | The required provider or lookup could not supply usable results |
+| `unsupported_chain` | The source-analysis path does not support the reported network |
+
+The exact status depends on the assessment layer. A completed RPC check does not imply that Etherscan source analysis also completed.
+
+### Important distinction
+
+ChainShield is not a formal smart-contract auditor. It does not currently claim comprehensive vulnerability detection, transaction simulation, wallet protection at signing time, or an automatic determination that a contract is safe.
+
+---
+
+## 🧰 Technology stack
+
+| Layer | Technology | Role |
 |---|---|---|
-| Browser extension | Chrome Extension Manifest V3 | Extension permissions and popup integration |
-| Frontend | HTML, CSS, JavaScript | Popup interface and evidence presentation |
-| Backend | Node.js, Express | HTTP API and investigation orchestration |
-| Search | TinyFish Search API | Retrieves public search results |
-| Configuration | dotenv | Loads the backend API key from a local environment file |
-| Testing | Node.js test runner and mocked responses | Tests backend and classification behavior |
-| Version control | Git and GitHub | Source code and change history |
+| Browser | Chrome Extension Manifest V3 | User-initiated investigation interface |
+| Extension UI | HTML, CSS, JavaScript | Input, progress, evidence, and assessment display |
+| Backend | Node.js, Express | Request validation and investigation orchestration |
+| Web intelligence | TinyFish Search API | Public search evidence |
+| Threat reputation | Google Safe Browsing API | Submitted-URL threat lookup |
+| Blockchain access | Ethereum JSON-RPC over HTTPS | Read-only network and bytecode observations |
+| Source intelligence | Etherscan API V2 | Verified-source and proxy metadata |
+| HTTP and async handling | Node.js built-ins, including `fetch` and `AbortController` | Provider requests, timeouts, and response handling |
+| Configuration | dotenv | Backend environment configuration |
+| Testing | Node.js test runner | Automated validation of API, integration, and failure-handling behavior |
 
-ChainShield currently does not require a database, a frontend framework, or an AI model for its core investigation flow.
+The current implementation does not require a database or a wallet connection for its core investigation workflow.
 
 ---
 
-## Quick start
+## 🚀 Quick start
 
-### Requirements
+### Prerequisites
 
 - Google Chrome
-- Node.js 18 or newer
+- Node.js with built-in `fetch` and `AbortController` support (Node.js 18 or newer)
 - npm
 - A TinyFish API key
+- A Google Safe Browsing API key with the required API enabled
+- An Ethereum HTTPS JSON-RPC endpoint and Etherscan API key for the optional Web3 analysis
 
 ### 1. Clone the repository
 
@@ -197,26 +340,39 @@ cd server
 npm install
 ```
 
-### 3. Configure the API key
+### 3. Configure environment variables
 
-Create a local environment file from the provided example:
+Create the local environment file using the provided template:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Open `server/.env` and add your own provider keys:
+Edit `server/.env` and add your own credentials:
 
 ```dotenv
+PORT=3000
+
 TINYFISH_API_KEY=your_tinyfish_api_key
 GOOGLE_SAFE_BROWSING_API_KEY=your_google_safe_browsing_api_key
-ETH_RPC_URL=your_ethereum_rpc_https_endpoint
+
+ETH_RPC_URL=https://your-ethereum-rpc-endpoint
 ETHERSCAN_API_KEY=your_etherscan_api_key
 ```
 
-Create a free Etherscan account and generate an API key in its API dashboard. Replace the placeholders with your own provider values. `ETH_RPC_URL` must be an HTTPS Ethereum JSON-RPC endpoint. Keep both RPC credentials and `ETHERSCAN_API_KEY` in this backend-only file; never commit or share its contents. Restart the backend after changing environment variables. Restrict the Google key to the Safe Browsing API in Google Cloud.
+Use actual provider credentials locally. The values above are placeholders, not working keys.
 
-### 4. Run the tests
+- `TINYFISH_API_KEY` enables TinyFish Search.
+- `GOOGLE_SAFE_BROWSING_API_KEY` enables Google Safe Browsing lookups.
+- `ETH_RPC_URL` configures the backend's Ethereum JSON-RPC provider.
+- `ETHERSCAN_API_KEY` enables supported verified-source and proxy metadata lookups.
+- `PORT` optionally overrides the backend port.
+
+`ETH_RPC_TIMEOUT_MS` can optionally be configured to control the Ethereum RPC timeout where supported by the implementation.
+
+Never commit `server/.env`, place provider keys in extension code, or share credentials in screenshots, logs, or public issues.
+
+### 4. Run the automated tests
 
 From the `server` directory:
 
@@ -224,7 +380,9 @@ From the `server` directory:
 npm test
 ```
 
-Tests should complete successfully before you begin manual verification. The tests use mocked search responses where configured, so they should not require a live TinyFish request.
+The latest project audit reported **127 passing tests and zero failures**. Run the suite against your current checkout to verify its present state.
+
+Automated tests use controlled provider responses where applicable; passing tests alone do not prove that live provider credentials or external services are working.
 
 ### 5. Start the backend
 
@@ -232,413 +390,169 @@ Tests should complete successfully before you begin manual verification. The tes
 npm start
 ```
 
-The backend listens on:
+The backend listens on `http://localhost:3000` by default.
 
-```text
-http://localhost:3000
-```
+Keep the terminal open while testing the extension.
 
-Keep this terminal open while using the extension.
+### 6. Check backend health
 
-### 6. Verify the backend
-
-Open another PowerShell terminal and run:
+Open another PowerShell terminal:
 
 ```powershell
 Invoke-RestMethod http://localhost:3000/api/health
 ```
 
-Expected health response:
+A successful health response confirms that the backend is responding. It does not independently confirm that all provider integrations are configured or reachable.
 
-```json
-{
-  "status": "ok"
-}
-```
-
-This confirms that the server is responding. It does not by itself confirm that TinyFish is configured or that a live investigation works.
-
-### 7. Load the extension in Chrome
+### 7. Load ChainShield into Chrome
 
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
-3. Click **Load unpacked**.
-4. Select the repository's `extension` folder.
-5. Open a regular `http://` or `https://` website.
-6. Open ChainShield from the Extensions menu.
-7. Click **Investigate this website**.
+3. Select **Load unpacked**.
+4. Choose the repository's `extension` folder.
+5. Open a normal HTTP or HTTPS website.
+6. Open ChainShield from Chrome's Extensions menu.
+7. Start an investigation and review the returned results.
 
-After changing extension files, return to `chrome://extensions`, click **Reload** on ChainShield, and reopen the popup.
+For Web3 testing, enter a valid Ethereum contract address in the optional contract-analysis field.
 
----
-
-## Configuration
-
-| Setting | Location | Purpose |
-|---|---|---|
-| `TINYFISH_API_KEY` | `server/.env` | Authenticates requests from the backend to TinyFish |
-| `GOOGLE_SAFE_BROWSING_API_KEY` | `server/.env` | Authenticates backend URL lookups with Google Safe Browsing |
-| `ETH_RPC_URL` | `server/.env` | Backend-only HTTPS Ethereum JSON-RPC endpoint, used only when a contract address is submitted |
-| `ETH_RPC_TIMEOUT_MS` | Backend environment | Optional timeout for each Ethereum JSON-RPC request; defaults to `6000` ms |
-| `ETHERSCAN_API_KEY` | `server/.env` | Backend-only Etherscan API key for verified source lookups on Ethereum Mainnet |
-| `PORT` | Backend environment | Optional server port; defaults to `3000` |
-
-The extension currently expects the API at `http://localhost:3000`. If you change the backend port, update the API URL in `extension/popup.js` to match. Restart the backend after changing `ETHERSCAN_API_KEY`; the key is never sent to the extension.
-
-The Google Safe Browsing integration is for non-commercial development use. Google directs commercial users to Web Risk. The submitted URL is sent to Google for lookup. Positive matches are cached in memory only for the provider's returned cache duration; no lookup history is persisted. Do not put either provider key in the extension's JavaScript, HTML, manifest, or any response sent to the browser.
+After editing extension files, return to `chrome://extensions`, reload ChainShield, and reopen the popup.
 
 ---
 
-## API reference
-
-### `GET /api/health`
-
-Checks whether the Express server is responding.
-
-Example:
-
-```powershell
-Invoke-RestMethod http://localhost:3000/api/health
-```
-
-Successful response:
-
-```json
-{
-  "status": "ok"
-}
-```
+## 🔌 API reference
 
 ### `POST /api/investigations`
 
-Starts a website investigation using the supplied URL.
+Starts an investigation of a submitted website URL. A contract address can optionally request the additional Web3 analysis path.
 
-**Request**
+**Request fields**
 
-```http
-POST /api/investigations
-Content-Type: application/json
-```
+| Field | Required | Purpose |
+|---|---|---|
+| `url` | Yes | Website URL to investigate |
+| `contractAddress` | No | Ethereum address for the optional contract analysis |
+
+Example request shape:
 
 ```json
 {
   "url": "https://example.com",
-  "contractAddress": "0x0000000000000000000000000000000000000000"
+  "contractAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 }
 ```
 
-`contractAddress` is optional and must be `0x` followed by exactly 40 hexadecimal characters. When omitted, no Ethereum RPC request is made.
+This is an illustrative request shape, not a sample security verdict. The address is supplied explicitly and is not automatically associated with the submitted website.
 
-PowerShell example:
+**Validation expectations**
 
-```powershell
-Invoke-RestMethod `
-  -Uri http://localhost:3000/api/investigations `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"url":"https://example.com"}'
-```
+- Only supported HTTP and HTTPS website URLs should proceed through website investigation.
+- A supplied contract address must use the expected `0x` prefix followed by exactly 40 hexadecimal characters.
+- Invalid contract addresses should be rejected before contract-provider requests.
+- Omitting the contract address should preserve the website-only workflow.
 
-This command makes a live investigation request and may consume TinyFish API quota.
+The returned JSON contains the applicable website and provider assessment details. Consult the route implementation for the precise response schema and error format.
 
-**Successful response shape**
+### `GET /api/health`
 
-The following is an illustrative example of the response structure, not a claim about the current live search results:
+Checks whether the backend is responding.
 
-```json
-{
-  "status": "research_available",
-  "summary": "Search sources are available for review. Their relevance does not prove malicious activity.",
-  "domain": "example.com",
-  "evidence": [
-    {
-      "title": "Example source",
-      "url": "https://source.example/report",
-      "snippet": "Example search-result excerpt",
-      "source": "TinyFish Search",
-      "category": "domain_specific",
-      "categoryReason": "The source URL is related to the investigated hostname. Relevance does not establish maliciousness."
-    }
-  ],
-  "investigationType": "web_search",
-  "demo": false,
-  "threatAssessment": {
-    "status": "no_match",
-    "providers": [
-      {
-        "id": "google_safe_browsing",
-        "name": "Google Safe Browsing",
-        "status": "no_match",
-        "scope": "submitted_url",
-        "matches": []
-      }
-    ]
-  },
-  "urlSignals": {
-    "findings": []
-  },
-  "ethereumAssessment": {
-    "status": "available",
-    "address": "0x0000000000000000000000000000000000000000",
-    "chainId": "0x1",
-    "latestBlock": "0x1234",
-    "codeStatus": "no_bytecode"
-  }
-}
-```
-
-The actual evidence, summary, and status depend on the backend implementation and upstream search response.
-
-`threatAssessment` is separate from TinyFish evidence and may have `reported`, `no_match`, `incomplete`, or `unavailable` status. A `no_match` means only that Google Safe Browsing returned no match for the submitted URL; it is not a safety verdict. An unavailable provider is never represented as a clean result.
-
-Google requires qualifying language for reported threats, a linked “Advisory provided by Google” attribution, and notice that results can include false positives and false negatives. The popup displays these notices. Review the current [Safe Browsing usage requirements](https://developers.google.com/safe-browsing/v4/usage-limits) before using this integration beyond non-commercial development.
-
-`urlSignals` is a separate, local heuristic analysis of the submitted URL structure. It can report an IP-address hostname, a punycode hostname label, or at least four labels before the final two hostname labels. These are low-severity review signals, not confirmed threat intelligence; an empty findings list does not mean the website is safe. This analysis does not visit the submitted website.
-
-`ethereumAssessment` is an optional-address, read-only lookup against the backend-configured Ethereum RPC endpoint. Its status is `not_requested`, `available`, or `unavailable`. When available, it reports the chain ID, latest block, and whether `eth_getCode` returned bytecode at the latest block. `0x` means no bytecode was returned at that chain and block; it does not prove that the address is an externally owned account. Bytecode presence or absence does not establish whether an address or contract is safe or malicious. Raw bytecode is not returned.
-
-When `contractAddress` is supplied, `contractAnalysis` is an additional, independent result. It uses the chain reported by Ethereum RPC and retrieves verified source and proxy metadata from Etherscan only when that chain is Ethereum Mainnet (chain ID `0x1`). It follows implementation addresses reported by Etherscan, validating each address and analyzing each retrieved source as a separate layer. Traversal is limited to three implementation hops after the submitted contract. Repeated addresses stop traversal as a cycle; unverified, unavailable, malformed, or over-limit layers make the overall result `incomplete` and include the reason. Results distinguish `available`, `unverified`, `unsupported_chain`, `unavailable`, and `incomplete`.
-
-Source indicators cover possible minting, pause, address restriction, upgrade, and administrative capabilities. The analyzer uses source-pattern heuristics and does not fully parse Solidity or prove effective access control, exploitability, current state, or malicious intent. Proxy metadata and verified source can help identify implementation logic, but unavailable or unverified source leaves analysis incomplete. Detected capabilities are not necessarily vulnerabilities, and no findings do not establish that a contract is safe or non-malicious. The analysis is currently Ethereum Mainnet only and never returns raw source code.
-
-### Response fields
-
-| Field | Description |
-|---|---|
-| `status` | Indicates whether research sources were returned or no results were found. |
-| `summary` | Explains the search outcome without claiming a security verdict. |
-| `domain` | Hostname extracted from the submitted URL. |
-| `evidence` | List of normalized search results and their classifications. |
-| `investigationType` | Identifies the investigation as a web search. |
-| `demo` | Indicates whether the response is a demo response. |
-| `threatAssessment` | Separate Google Safe Browsing lookup result; it does not use TinyFish relevance as a threat score. |
-| `urlSignals` | Separate structural URL heuristic findings; these do not change the Google Safe Browsing status. |
-| `ethereumAssessment` | Optional read-only Ethereum account/code lookup, separate from search relevance and Safe Browsing. |
-| `contractAnalysis` | Optional Etherscan verified-source capability analysis, independent from all other provider results. |
-
-Evidence items may contain `title`, `url`, `snippet`, `source`, `position`, `siteName`, `category`, and `categoryReason`, depending on the available upstream data and normalization.
-
-Error responses use a JSON `error` field. Malformed upstream results and upstream failures should not be silently presented as a successful empty investigation.
+A successful health check does not guarantee that TinyFish, Google Safe Browsing, Ethereum RPC, or Etherscan is reachable.
 
 ---
 
-## Evidence classification
+## 🧪 Testing and verification
 
-ChainShield groups search results into three categories.
+ChainShield's automated tests are designed to validate behavior at the boundaries between the extension, backend, and external services.
 
-| Category | Meaning |
-|---|---|
-| `domain_specific` | The result URL or relevant text is associated with the investigated hostname. This is a relevance signal, not proof of a threat. |
-| `general_information` | General security guidance that is not specifically about the investigated hostname. |
-| `irrelevant_or_unclear` | Results that are weakly related, unclear, or unrelated to the investigation. |
+The latest reported audit covered 127 tests across six test files.
 
-Each classified item can include a `categoryReason` explaining why it was assigned that category.
+Important test areas include:
 
-### Why classification matters
+- URL and contract-address validation
+- API request and response handling
+- TinyFish response validation and evidence classification
+- Google Safe Browsing match, no-match, and error paths
+- Ethereum JSON-RPC response validation and failure handling
+- Etherscan source lookup and capability classification
+- Proxy-chain traversal, cycles, malformed metadata, and traversal limits
+- Incomplete and unavailable analysis states
+- Provider failure isolation
+- Safe rendering of investigation results
 
-A search engine can return generic phishing guides, broad security articles, or unrelated pages even when the search query contains a particular domain.
+For a release check, run `npm test`, review `git diff --check`, and manually verify both website-only and contract-address investigations with valid provider configuration.
 
-ChainShield attempts to separate domain-related evidence from general information and weak matches, so the user can prioritize what to inspect.
-
-```mermaid
-flowchart TD
-    A["Normalized search result"] --> B["Inspect result URL and text"]
-    B --> C{"Evidence of domain relevance?"}
-    C -- "Yes" --> D["domain_specific"]
-    C -- "General security guidance" --> E["general_information"]
-    C -- "Weak, unrelated or unclear" --> F["irrelevant_or_unclear"]
-    D --> G["Attach explanation"]
-    E --> G
-    F --> G
-    G --> H["Display result for user review"]
-    H --> I["No automatic safe or malicious verdict"]
-```
-
-The classification is heuristic. A domain-related result can still be harmless, inaccurate, or misleading. The classification is not a substitute for independent verification.
-
-If no domain-specific evidence is found, ChainShield should explain that limitation clearly. It must not infer that the website is safe.
+A passing automated suite should be supplemented with live smoke tests because mocked responses cannot establish current provider availability.
 
 ---
 
-## Project structure
+## 🔐 Security model and limitations
 
-```text
-ChainShield/
-├── extension/
-│   ├── manifest.json
-│   ├── popup.html
-│   ├── popup.css
-│   └── popup.js
-│
-├── server/
-│   ├── src/
-│   │   ├── app.js
-│   │   ├── tinyfish.js
-│   │   ├── safe-browsing.js
-│   │   ├── classification.js
-│   │   └── routes/
-│   │       └── investigations.js
-│   │
-│   ├── test/
-│   │   ├── app.test.js
-│   │   ├── investigations.test.js
-│   │   └── classification.test.js
-│   │
-│   ├── .env.example
-│   ├── package.json
-│   └── package-lock.json
-│
-├── .gitignore
-└── README.md
-```
+ChainShield is a security-investigation prototype, not a replacement for independent security review.
 
-### Important files
+### Implemented safeguards
 
-| File | Responsibility |
-|---|---|
-| `extension/manifest.json` | Declares the extension configuration and permissions. |
-| `extension/popup.html` | Defines the popup interface. |
-| `extension/popup.css` | Controls popup styling, layout, and interaction states. |
-| `extension/popup.js` | Reads the active tab, calls the backend, and renders investigation results. |
-| `server/src/app.js` | Configures Express, middleware, health checks, and server startup. |
-| `server/src/tinyfish.js` | Builds the search query, calls TinyFish, and normalizes upstream responses. |
-| `server/src/safe-browsing.js` | Performs a timed, backend-only Google Safe Browsing URL lookup. |
-| `server/src/classification.js` | Deduplicates evidence and assigns categories with explanations. |
-| `server/src/routes/investigations.js` | Validates investigation requests and constructs API responses. |
-| `server/test/app.test.js` | Tests the health endpoint and request validation. |
-| `server/test/investigations.test.js` | Tests investigation behavior with mocked upstream responses. |
-| `server/test/classification.test.js` | Tests classification, URL handling, and deduplication. |
+- Provider credentials remain on the backend.
+- Website URLs and supplied contract addresses are validated before the relevant processing steps.
+- Provider calls use controlled request handling, including timeouts, redirect restrictions, and response validation where implemented.
+- Ethereum RPC access is read-only and limited to the supported methods described above.
+- Contract-source lookups are restricted to the supported chain path.
+- Proxy traversal is bounded and uses validated implementation metadata.
+- Provider failures and incomplete results are represented explicitly rather than automatically treated as clean findings.
+- Extension content is rendered using safe DOM practices rather than trusting arbitrary provider text as HTML.
+- Investigations are initiated by the user; ChainShield does not automatically block websites or submit blockchain transactions.
+
+### What ChainShield does not guarantee
+
+- It does not detect every phishing website, scam, or malicious contract.
+- It does not prove a website is safe when no threat match or relevant search result is returned.
+- It does not treat a verified source as proof of contract safety.
+- It does not perform a complete formal verification or comprehensive smart-contract audit.
+- It does not establish a relationship between a website and a user-supplied contract address.
+- It does not connect to wallets, sign transactions, or automatically block sites.
+
+A production deployment would also require a deployment-specific review of authentication, rate limiting, abuse prevention, origin policy, secret management, monitoring, and operational controls.
 
 ---
 
-## Testing
+## 🗺️ Roadmap
 
-Run the automated backend test suite from the `server` directory:
+Potential next steps, subject to scope and validation:
 
-```powershell
-npm test
-```
+- Expand threat-intelligence coverage with additional trustworthy public sources.
+- Improve evidence provenance, source freshness, and relevance explanations.
+- Add repeatable malicious-versus-benign evaluation fixtures to measure detection quality.
+- Improve supported proxy and implementation-resolution coverage.
+- Add deeper contract analysis only where the method and its limitations can be tested.
+- Add caching and abuse controls if the service moves beyond local development.
+- Improve extension-level integration testing and release automation.
 
-The test suite should cover:
-
-- Health endpoint behavior.
-- Invalid investigation URLs.
-- Search query construction.
-- Normalized search results.
-- Domain and subdomain relevance.
-- Conservative URL deduplication.
-- Empty and malformed upstream responses.
-- Upstream failures and safe error handling.
-- Google Safe Browsing matches, no-match results, configuration errors, timeouts, and malformed responses.
-- Evidence categories and explanations.
-
-Mocked tests do not verify live provider availability, API-key validity, or Google Cloud API restrictions.
-
-### Manual verification checklist
-
-- [ ] The backend health endpoint returns `status: ok`.
-- [ ] The extension loads in Chrome without a manifest error.
-- [ ] An investigation sends the active website URL to the backend.
-- [ ] Search results appear under the appropriate categories.
-- [ ] Classification explanations appear where available.
-- [ ] Source links open only when clicked.
-- [ ] No-results responses do not imply that a site is safe.
-- [ ] API failures are displayed as errors, not as successful empty investigations.
-- [ ] Chrome internal pages such as `chrome://settings` are rejected as unsupported.
-- [ ] No API key appears in the extension or API responses.
-- [ ] A Google match is shown separately from web-search relevance and includes Google's advisory attribution.
-- [ ] No match and unavailable checks are not described as safe.
+Future work should preserve the same principle: report what the available evidence supports, make uncertainty visible, and never equate missing evidence with safety.
 
 ---
 
-## Security and privacy
+## 🤝 Contributing
 
-ChainShield follows a conservative, evidence-first approach.
+Contributions that improve correctness, explainability, test coverage, and safe failure handling are especially welcome.
 
-- **Backend-held API keys:** TinyFish and Google Safe Browsing keys are stored in `server/.env` and used only by backend clients.
-- **No key in the extension:** The extension must never receive the API key.
-- **Provider separation:** Google threat matches are distinct from TinyFish search relevance.
-- **Heuristic separation:** Structural URL signals are displayed separately from provider findings and never establish that a website is malicious.
-- **Limited lookup:** Google Safe Browsing checks only the submitted URL; an unavailable or no-match response does not establish safety.
-- **No target fetching for heuristics:** URL structure is analyzed locally from the submitted URL; the heuristic module does not visit the target or follow redirects.
-- **Read-only Ethereum RPC:** Ethereum RPC calls are limited to `eth_chainId`, `eth_blockNumber`, and `eth_getCode`; no wallet connection, signing, or transaction submission occurs.
-- **Backend-only RPC endpoint:** `ETH_RPC_URL` is read only by the backend and is never accepted from a request or returned to the extension.
-- **Input validation:** Investigation URLs are validated before searching.
-- **Safe source rendering:** Titles, snippets, and explanations should be rendered as text rather than trusted HTML.
-- **Explicit user action:** The user initiates an investigation from the popup.
-- **No automatic blocking:** ChainShield does not automatically block websites.
-- **No unsupported verdicts:** Search evidence is not treated as a definitive security determination.
-- **No-results caution:** The absence of search evidence is not evidence that a website is safe.
+1. Fork the repository.
+2. Create a focused feature branch.
+3. Add or update tests for the behavior being changed.
+4. Run the test suite and inspect the resulting diff.
+5. Open a pull request explaining the problem, implementation, and verification performed.
 
-The current prototype uses a local backend and is not production deployment guidance. A public deployment would require additional security controls, including authentication or abuse protection, rate limiting, stricter origin policies, and secure secret management.
+Do not include API keys, RPC credentials, personal tokens, or local environment files in contributions.
+
+## 📄 License
+
+Check the repository for an existing license before reusing or redistributing the project.
 
 ---
 
-## Troubleshooting
+<p align="center">
+  <strong>ChainShield — Investigate the evidence, not just the claim.</strong>
+</p>
 
-| Problem | What to check |
-|---|---|
-| `EADDRINUSE` on port `3000` | Another process is already using the port. Identify it before terminating anything. |
-| `npm start` says `package.json` cannot be found | Run the command from the `server` directory, not the repository root. |
-| Health endpoint works but investigation returns a demo response | Inspect the running process and confirm that it is using the intended ChainShield checkout and current source code. |
-| Extension says the response is missing expected details | Compare the actual `/api/investigations` JSON with the response structure expected by `extension/popup.js`. |
-| TinyFish configuration error | Check that `server/.env` exists and defines `TINYFISH_API_KEY`. Never paste the key into logs or public issues. |
-| Investigation returns no results | Confirm the API response status and inspect whether the upstream search returned a valid empty result list. No results does not mean safe. |
-| Investigation returns an upstream error | Check backend logs and TinyFish service/API configuration without exposing credentials. |
-| Changes do not appear in Chrome | Reload the extension at `chrome://extensions`, then close and reopen the popup. |
-| `npm test` fails because a dependency is missing | Run `npm install` from `server`, then rerun `npm test`. |
-
-### Identify the process using port 3000 on Windows
-
-```powershell
-netstat -ano | findstr :3000
-```
-
-Read the PID from the `LISTENING` line, then inspect it using the actual PID:
-
-```powershell
-Get-CimInstance Win32_Process -Filter "ProcessId = 13528" |
-  Select-Object ProcessId, ExecutablePath, CommandLine
-```
-
-Replace `13528` with the PID shown on your machine. Inspect the process before stopping it.
-
----
-
-## Current limitations
-
-- Search results depend on the upstream TinyFish Search API response.
-- The system does not perform a full malware scan, phishing-page analysis, smart-contract audit, or on-chain investigation.
-- URL heuristics currently cover only IP-address hostnames, explicit punycode labels, and unusually deep hostnames. They do not inspect page content, redirects, linked domains, or typosquatting.
-- Ethereum code inspection is only an observation at the configured chain's latest block; it is not a contract audit, safety verdict, or proof that an address without code is an externally owned account.
-- Classification is heuristic and can make mistakes.
-- Search-result excerpts are not independently verified facts.
-- No search results do not establish safety.
-- The current extension is designed around a local backend.
-- Automated backend tests do not replace manual browser verification.
-
----
-
-## Future scope
-
-Potential improvements, subject to validation and testing:
-
-- Add more trustworthy public threat-intelligence sources.
-- Improve evidence ranking and explainability.
-- Introduce source freshness and provenance indicators.
-- Add caching and rate limiting for repeated investigations.
-- Improve tests for malformed upstream responses and browser-extension integration.
-- Explore Web3-specific intelligence sources, such as public phishing reports and contract metadata, with clearly defined validation rules.
-- Add optional user-controlled investigation history if a persistence layer is justified.
-
-Future work should preserve ChainShield's core principle: report what the evidence supports, explain uncertainty, and never present missing evidence as proof of safety.
-
----
-
-## License
-
-Check the repository's license before redistributing or reusing the project.
-
----
-
-**ChainShield — investigate the evidence, not just the claim.**
+<p align="center">
+  Built to bring web intelligence and read-only Web3 inspection into one evidence-driven workflow.
+</p>
