@@ -15,6 +15,7 @@ const {
   checkEthereumContract,
   validateContractAddress
 } = require("../ethereum-rpc");
+const { analyzeContractSource } = require("../etherscan");
 
 const router = express.Router();
 
@@ -200,8 +201,26 @@ router.post("/", async (req, res) => {
     const ethereumAssessment = contractAddress
       ? buildEthereumAssessment(ethereumResult, contractAddress)
       : { status: "not_requested" };
+    const contractAnalysis = contractAddress
+      ? await analyzeContractSource(
+          contractAddress,
+          ethereumResult.status === "fulfilled" ? ethereumResult.value.chainId : null
+        ).catch((error) => {
+          console.warn(
+            `[investigations] Contract source analysis unavailable (category=${
+              error && typeof error.code === "string" ? error.code : "provider_error"
+            })`
+          );
+          return {
+            status: "unavailable",
+            reason: "provider_error",
+            message: "Verified contract source analysis could not be completed."
+          };
+        })
+      : undefined;
     const results = searchResult.value;
     const evidence = prepareEvidence(results, domain);
+    const optionalAssessment = contractAddress ? { contractAnalysis } : {};
 
     if (evidence.length === 0) {
       return res.json({
@@ -213,7 +232,8 @@ router.post("/", async (req, res) => {
         demo: false,
         threatAssessment,
         urlSignals,
-        ethereumAssessment
+        ethereumAssessment,
+        ...optionalAssessment
       });
     }
 
@@ -226,7 +246,8 @@ router.post("/", async (req, res) => {
       demo: false,
       threatAssessment,
       urlSignals,
-      ethereumAssessment
+      ethereumAssessment,
+      ...optionalAssessment
     });
   } catch (error) {
     const isTinyFishError = error instanceof TinyFishError;

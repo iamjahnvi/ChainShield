@@ -10,6 +10,7 @@ const {
   setSafeBrowsingFetch
 } = require("../src/safe-browsing");
 const { setEthereumRpcFetch } = require("../src/ethereum-rpc");
+const { setEtherscanFetch } = require("../src/etherscan");
 
 const TEST_API_KEY = "unit-test-secret-key-must-never-leak";
 const TEST_SAFE_BROWSING_KEY = "safe-browsing-test-key-must-never-leak";
@@ -22,6 +23,7 @@ const originalTimeoutMs = process.env.TINYFISH_TIMEOUT_MS;
 const originalSafeBrowsingApiKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
 const originalSafeBrowsingTimeoutMs = process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS;
 const originalEthereumRpcUrl = process.env.ETH_RPC_URL;
+const originalEtherscanApiKey = process.env.ETHERSCAN_API_KEY;
 
 let server;
 let baseUrl;
@@ -42,6 +44,9 @@ function guardFetch() {
   setSafeBrowsingFetch(async () => jsonResponse({}));
   setEthereumRpcFetch(async () => {
     throw new Error("No Ethereum RPC fetch mock was configured for this test.");
+  });
+  setEtherscanFetch(async () => {
+    throw new Error("No Etherscan fetch mock was configured for this test.");
   });
 }
 
@@ -72,11 +77,13 @@ after(async () => {
   setSearchFetch(null);
   setSafeBrowsingFetch(null);
   setEthereumRpcFetch(null);
+  setEtherscanFetch(null);
   process.env.TINYFISH_API_KEY = originalApiKey;
   process.env.TINYFISH_TIMEOUT_MS = originalTimeoutMs;
   process.env.GOOGLE_SAFE_BROWSING_API_KEY = originalSafeBrowsingApiKey;
   process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS = originalSafeBrowsingTimeoutMs;
   process.env.ETH_RPC_URL = originalEthereumRpcUrl;
+  process.env.ETHERSCAN_API_KEY = originalEtherscanApiKey;
   await new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
@@ -88,6 +95,7 @@ beforeEach(() => {
   process.env.GOOGLE_SAFE_BROWSING_API_KEY = TEST_SAFE_BROWSING_KEY;
   delete process.env.GOOGLE_SAFE_BROWSING_TIMEOUT_MS;
   process.env.ETH_RPC_URL = "https://rpc.example/route-test-credential";
+  process.env.ETHERSCAN_API_KEY = "etherscan-route-test-secret";
   capturedLogs = [];
   console.error = (...args) => {
     capturedLogs.push(args.map(String).join(" "));
@@ -149,6 +157,11 @@ test("valid investigation request returns validated TinyFish results", async () 
     ethereumRpcCalls += 1;
     throw new Error("Ethereum RPC should not be called without a contract address.");
   });
+  let etherscanCalls = 0;
+  setEtherscanFetch(async () => {
+    etherscanCalls += 1;
+    throw new Error("Etherscan should not be called without a contract address.");
+  });
 
   const { response, body } = await postInvestigation({
     url: "https://www.example.com/path?q=demo"
@@ -165,6 +178,7 @@ test("valid investigation request returns validated TinyFish results", async () 
   assert.deepEqual(body.urlSignals, { findings: [] });
   assert.deepEqual(body.ethereumAssessment, { status: "not_requested" });
   assert.equal(ethereumRpcCalls, 0);
+  assert.equal(etherscanCalls, 0);
   assert.match(body.summary, /do not establish whether the website is safe or malicious/i);
 
   assert.equal(body.evidence.length, 5);
@@ -292,6 +306,115 @@ test("optional Ethereum assessment reports network, block, and bytecode separate
   assert.ok(!JSON.stringify(body).includes("60016000"));
   assert.ok(!JSON.stringify(body).includes("route-test-credential"));
   assert.ok(!capturedLogs.join("\n").includes("route-test-credential"));
+});
+
+test("verified-source analysis is additive and independent from other investigation results", async (t) => {
+  await t.test("analyzes verified Mainnet source", async () => {
+    setSearchFetch(async () => jsonResponse({ results: [] }));
+    setSafeBrowsingFetch(async () => jsonResponse({}));
+    setEthereumRpcFetch(async (_endpoint, init) => {
+      const { id, method } = JSON.parse(init.body);
+      return rpcJsonResponse(id, {
+        eth_chainId: "0x1",
+        eth_blockNumber: "0x1234",
+        eth_getCode: "0x6000"
+      }[method]);
+    });
+    let explorerUrl;
+    setEtherscanFetch(async (url, init) => {
+      explorerUrl = new URL(url);
+      assert.equal(init.redirect, "error");
+      return new Response(
+        JSON.stringify({
+          status: "1",
+          message: "OK",
+          result: [
+            {
+              SourceCode:
+                "contract Token {\nfunction mint(address to) external onlyOwner { }\n}",
+              ContractName: "Token",
+              Proxy: "0",
+              Implementation: ""
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    const { response, body } = await postInvestigation({
+      url: "https://example.com",
+      contractAddress: "0x1234567890abcdef1234567890abcdef12345678"
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(body.status, "no_results");
+    assert.equal(body.threatAssessment.status, "no_match");
+    assert.equal(body.ethereumAssessment.status, "available");
+    assert.equal(body.contractAnalysis.status, "available");
+    assert.equal(body.contractAnalysis.sourceVerified, true);
+    assert.equal(body.contractAnalysis.proxyAnalysis.capabilities[0].status, "detected");
+    assert.equal(explorerUrl.searchParams.get("chainid"), "1");
+    assert.equal(explorerUrl.searchParams.get("apikey"), "etherscan-route-test-secret");
+    assert.ok(!JSON.stringify(body).includes("etherscan-route-test-secret"));
+    assert.ok(!JSON.stringify(body).includes("contract Token {"));
+    assert.ok(!capturedLogs.join("\n").includes("etherscan-route-test-secret"));
+  });
+
+  await t.test("does not call Etherscan for an unsupported chain", async () => {
+    setSearchFetch(async () => jsonResponse({ results: [] }));
+    setEthereumRpcFetch(async (_endpoint, init) => {
+      const { id, method } = JSON.parse(init.body);
+      return rpcJsonResponse(id, {
+        eth_chainId: "0x89",
+        eth_blockNumber: "0x1234",
+        eth_getCode: "0x"
+      }[method]);
+    });
+    let explorerCalled = false;
+    setEtherscanFetch(async () => {
+      explorerCalled = true;
+      return new Response("");
+    });
+
+    const { body } = await postInvestigation({
+      url: "https://example.com",
+      contractAddress: "0x1234567890abcdef1234567890abcdef12345678"
+    });
+
+    assert.equal(body.ethereumAssessment.status, "available");
+    assert.equal(body.contractAnalysis.status, "unsupported_chain");
+    assert.equal(body.contractAnalysis.chainId, "0x89");
+    assert.equal(explorerCalled, false);
+  });
+
+  await t.test("source-provider failure does not erase successful independent checks", async () => {
+    setSearchFetch(async () => jsonResponse({ results: [] }));
+    setSafeBrowsingFetch(async () => jsonResponse({}));
+    setEthereumRpcFetch(async (_endpoint, init) => {
+      const { id, method } = JSON.parse(init.body);
+      return rpcJsonResponse(id, {
+        eth_chainId: "0x1",
+        eth_blockNumber: "0x1234",
+        eth_getCode: "0x6000"
+      }[method]);
+    });
+    setEtherscanFetch(async () => {
+      throw new Error("provider failure containing etherscan-route-test-secret");
+    });
+
+    const { response, body } = await postInvestigation({
+      url: "https://example.com",
+      contractAddress: "0x1234567890abcdef1234567890abcdef12345678"
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(body.threatAssessment.status, "no_match");
+    assert.equal(body.ethereumAssessment.status, "available");
+    assert.equal(body.contractAnalysis.status, "unavailable");
+    assert.ok(!JSON.stringify(body).includes("etherscan-route-test-secret"));
+    assert.ok(!capturedLogs.join("\n").includes("etherscan-route-test-secret"));
+  });
 });
 
 test("invalid contract addresses are rejected before any provider request", async () => {
