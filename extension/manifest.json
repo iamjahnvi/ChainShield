@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "description": "A demo interface for evidence-based Web3 website risk investigation.",
   "action": {
-    "default_popup": "popup.html",
     "default_title": "ChainShield"
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "permissions": [
     "activeTab",

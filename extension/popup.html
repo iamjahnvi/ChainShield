@@ -3,372 +3,272 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ChainShield</title>
+    <meta name="theme-color" content="#0c151d">
+    <title>ChainShield — Website and Web3 investigation</title>
     <link rel="stylesheet" href="popup.css">
     <script src="popup.js" defer></script>
   </head>
   <body>
-    <div class="onboarding-container" id="onboarding-container">
-      <!-- Brand header shown on all pages -->
-      <header class="brand-header" id="brand-header" aria-label="ChainShield header">
-        <div class="brand">
-          <span class="brand-mark" aria-hidden="true">C</span>
-          <div class="brand-text">
-            <p class="eyebrow">WEB3 SITE CHECK</p>
-            <h1>ChainShield</h1>
-          </div>
-        </div>
-        <button class="btn-secondary" id="skip-onboarding" aria-label="Skip onboarding and open investigation">
-          Skip
-        </button>
-      </header>
-
-      <!-- Onboarding steps -->
-      <main class="onboarding-steps" id="onboarding-steps" aria-label="ChainShield onboarding">
-        <!-- Step 1: Know what you're opening -->
-        <div class="onboarding-step active" id="step-1" role="region" aria-label="Step 1: Know what you're opening">
-          <div class="step-header">
-            <span class="step-eyebrow">STEP 1 OF 4</span>
-          </div>
-
-          <h2 class="step-heading">Know what you're opening.</h2>
-
-          <p class="step-supporting">
-            ChainShield investigates websites using public web intelligence, threat-reputation checks, and URL analysis—helping you examine warning signs before you interact.
-          </p>
-
-          <div class="step-visual">
-            <svg viewBox="0 0 200 140" aria-hidden="true">
-              <rect width="200" height="140" rx="8" fill="#1e212a" />
-              <circle cx="80" cy="55" r="8" fill="#167568" />
-              <circle cx="120" cy="80" r="6" fill="#3b82f6" />
-              <circle cx="60" cy="30" r="5" fill="#10b981" />
-              <circle cx="140" cy="40" r="5" fill="#f59e0b" />
-              <path d="M40 70 Q80 20 120 70 Q160 120 200 70" stroke="#6b7c84" stroke-width="1" fill="none" />
-              <text x="100" y="75" text-anchor="middle" fill="#6b7c84" font-size="8">web search</text>
-              <text x="100" y="85" text-anchor="middle" fill="#6b7c84" font-size="8">threat rep</text>
-              <text x="100" y="95" text-anchor="middle" fill="#6b7c84" font-size="8">url heuristics</text>
-            </svg>
-            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--on-muted); pointer-events:none; font-size:10px;">
-              Illustration shows independent signals ChainShield examines
-            </div>
-          </div>
-
-          <div class="step-nav">
-            <button class="step-nav-button" data-step="1" aria-label="Back to step 1">Back</button>
-            <button class="step-nav-button" data-step="2" aria-label="Go to step 2">Next step →</button>
-          </div>
-        </div>
-
-        <!-- Step 2: Look beyond the surface -->
-        <div class="onboarding-step" id="step-2" role="region" aria-label="Step 2: Look beyond the surface">
-          <div class="step-header">
-            <span class="step-eyebrow">STEP 2 OF 4</span>
-          </div>
-
-          <h2 class="step-heading">Look beyond the surface.</h2>
-
-          <p class="step-supporting">
-            Websites can look convincing. ChainShield combines independent checks to help you investigate suspicious signals and understand where the evidence comes from.
-          </p>
-
-          <ul class="step-capabilities">
-            <li class="step-capability">
-              <span class="step-capability-number">01</span>
-              <div class="step-capability-content">
-                <strong>TinyFish Web Intelligence</strong>
-                <div>Retrieves relevant public search evidence about the investigated hostname. Search relevance is context, not proof of malicious activity.</div>
-              </div>
-            </li>
-            <li class="step-capability">
-              <span class="step-capability-number">02</span>
-              <div class="step-capability-content">
-                <strong>Threat Reputation</strong>
-                <div>Checks the submitted URL using Google Safe Browsing.</div>
-              </div>
-            </li>
-            <li class="step-capability">
-              <span class="step-capability-number">03</span>
-              <div class="step-capability-content">
-                <strong>URL Structure</strong>
-                <div>Examines suspicious URL patterns such as IP hostnames, punycode labels, and unusually deep subdomains.</div>
-              </div>
-            </li>
-            <li class="step-capability">
-              <span class="step-capability-number">04</span>
-              <div class="step-capability-content">
-                <strong>Ethereum Intelligence</strong>
-                <div>When a contract address is provided, retrieves on-chain observations and analyzes verified source metadata and proxy implementations.</div>
-              </div>
-            </li>
-          </ul>
-
-          <div class="step-visual">
-            <svg viewBox="0 0 200 180" aria-hidden="true">
-              <rect width="200" height="180" rx="8" fill="#1e212a" />
-              <polyline points="0 180 200 180 200 0 0 0" stroke="#3b82f6" stroke-width="1" fill="none" />
-              <line x1="0" y1="90" x2="200" y2="90" stroke="#3b82f6" stroke-width="1" />
-              <line x1="60" y1="0" x2="60" y2="90" stroke="#3b82f6" stroke-width="1" />
-              <line x1="140" y1="0" x2="140" y2="90" stroke="#3b82f6" stroke-width="1" />
-              <text x="25" y="30" fill="#6b7c84" font-size="10">Website URL</text>
-              <text x="25" y="70" fill="#6b7c84" font-size="10">TinyFish Search</text>
-              <text x="25" y="110" fill="#6b7c84" font-size="10">Threat Reputation</text>
-              <text x="25" y="150" fill="#6b7c84" font-size="10">URL Analysis</text>
-              <text x="160" y="30" fill="#6b7c84" font-size="10">Ethereum RPC</text>
-              <text x="160" y="90" fill="#6b7c84" font-size="10">Etherscan</text>
-              <text x="160" y="150" fill="#6b7c84" font-size="10">Proxy chain</text>
-              <path d="M15 30 L45 30 L45 70 M15 70 L45 70" stroke="#6b7c84" stroke-width="1" fill="none" />
-              <path d="M165 90 L195 90 L195 150 M165 150 L195 150" stroke="#6b7c84" stroke-width="1" fill="none" />
-            </svg>
-            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--on-muted); pointer-events:none; font-size:10px;">Investigation flow: web + optional Web3</div>
-          </div>
-
-          <div class="step-nav">
-            <button class="step-nav-button" data-step="1" aria-label="Go to step 1">Back</button>
-            <button class="step-nav-button" data-step="3" aria-label="Go to step 3">Next step →</button>
-          </div>
-        </div>
-
-        <!-- Step 3: Look deeper into Web3 -->
-        <div class="onboarding-step" id="step-3" role="region" aria-label="Step 3: Look deeper into Web3">
-          <div class="step-header">
-            <span class="step-eyebrow">STEP 3 OF 4</span>
-          </div>
-
-          <h2 class="step-heading">Look deeper into Web3.</h2>
-
-          <p class="step-supporting">
-            When a website involves a smart contract, ChainShield can inspect selected on-chain details and available verified source code to surface capabilities that deserve closer review.
-          </p>
-
-          <ul class="step-capabilities">
-            <li class="step-capability">
-              <span class="step-capability-number">□</span>
-              <div class="step-capability-content">
-                <strong>Contract presence</strong>
-                <div>Checks whether bytecode is returned for the supplied address at the selected block reference. Bytecode presence or absence does not establish whether an address is safe or malicious, or prove that it is an externally owned account.</div>
-              </div>
-            </li>
-            <li class="step-capability">
-              <span class="step-capability-number">□</span>
-              <div class="step-capability-content">
-                <strong>Privileged capabilities</strong>
-                <div>Looks for source-code patterns associated with minting, pausing, blacklist controls, upgradeability, and privileged administration. Detected indicators do not establish malicious behavior.</div>
-              </div>
-            </li>
-            <li class="step-capability">
-              <span class="step-capability-number">□</span>
-              <div class="step-capability-content">
-                <strong>Proxy implementations</strong>
-                <div>Follows validated implementation metadata through a bounded proxy chain to reduce the chance of overlooking relevant implementation source.</div>
-              </div>
-            </li>
-            <li class="step-capability">
-              <span class="step-capability-number">□</span>
-              <div class="step-capability-content">
-                <strong>Evidence and uncertainty</strong>
-                <div>Distinguishes completed checks from incomplete or unavailable analysis. No detected indicators do not establish that a contract is safe.</div>
-              </div>
-            </li>
-          </ul>
-
-          <div class="step-visual">
-            <svg viewBox="0 0 200 180" aria-hidden="true">
-              <rect width="200" height="180" rx="8" fill="#1e212a" />
-              <!-- Example address -->
-              <text x="15" y="30" fill="#6b7c84" font-size="11" font-family="monospace">0xA3f5...7c21</text>
-              <text x="15" y="50" fill="#6b7c84" font-size="11" font-family="monospace">Ethereum Mainnet</text>
-              <!-- Bytecode observation -->
-              <circle cx="80" cy="65" r="5" fill="#3b82f6" />
-              <text x="88" y="68" fill="#6b7c84" font-size="10">bytecode</text>
-              <!-- Proxy diagram -->
-              <line x1="30" y1="90" x2="50" y2="90" stroke="#6b7c84" stroke-width="1" />
-              <polygon points="45 85 55 85 50 95 45 95" stroke="#6b7c84" stroke-width="1" fill="#1e212a" />
-              <line x1="55" y1="90" x2="75" y2="90" stroke="#6b7c84" stroke-width="1" />
-              <polygon points="70 85 80 85 75 95 70 95" stroke="#6b7c84" stroke-width="1" fill="#1e212a" />
-              <line x1="80" y1="90" x2="100" y2="90" stroke="#6b7c84" stroke-width="1" />
-              <!-- Indicators -->
-              <text x="30" y="120" fill="#6b7c84" font-size="10">↳ Mint</text>
-              <text x="30" y="135" fill="#6b7c84" font-size="10">↳ Pause</text>
-              <text x="30" y="150" fill="#6b7c84" font-size="10">↳ Upgrade</text>
-              <text x="30" y="165" fill="#6b7c84" font-size="10">↳ Admin</text>
-              <!-- Warning -->
-              <text x="15" y="185" fill="#f59e0b" font-size="10" font-weight="600">⚡ Capability detection is not a safety verdict</text>
-            </svg>
-            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--on-muted); pointer-events:none; font-size:10px;">Illustrative: contract inspection concepts</div>
-          </div>
-
-          <div class="step-nav">
-            <button class="step-nav-button" data-step="2" aria-label="Go to step 2">Back</button>
-            <button class="step-nav-button" data-step="4" aria-label="Go to step 4">Next step →</button>
-          </div>
-        </div>
-
-        <!-- Step 4: Investigate before you interact -->
-        <div class="onboarding-step" id="step-4" role="region" aria-label="Step 4: Investigate before you interact">
-          <div class="step-header">
-            <span class="step-eyebrow">STEP 4 OF 4</span>
-          </div>
-
-          <h2 class="step-heading">Investigate before you interact.</h2>
-
-          <p class="step-supporting">
-            Open a website, launch ChainShield, and investigate its signals. Add an Ethereum contract address when you want to inspect on-chain details.
-          </p>
-
-          <div class="step4-actions">
-            <div class="step4-action-box">
-              <span style="color:var(--on-muted); font-size:11px; line-height:1.5;">1</span>
-              <span style="color:var(--on-primary); font-size:12px; font-weight:600;">Open a website you want to investigate.</span>
-            </div>
-            <div class="step4-action-box">
-              <span style="color:var(--on-muted); font-size:11px; line-height:1.5;">2</span>
-              <span style="color:var(--on-primary); font-size:12px; font-weight:600;">Open ChainShield from Chrome's Extensions menu.</span>
-            </div>
-            <div class="step4-action-box">
-              <span style="color:var(--on-muted); font-size:11px; line-height:1.5;">3</span>
-              <span style="color:var(--on-primary); font-size:12px; font-weight:600;">Review the evidence and any incomplete checks before deciding what to do next.</span>
-            </div>
-          </div>
-
-          <div class="step-nav step4-nav">
-            <button class="step4-action-btn secondary" data-step="3" aria-label="Go back to step 3">Review how it works</button>
-            <button class="step4-action-btn" data-onboarding-complete="true" aria-label="Open investigation workspace">Open investigation workspace</button>
-          </div>
-
-          <p class="step4-security-note">
-            <strong>ChainShield provides investigative evidence, not a guarantee of safety.</strong> Never share your wallet recovery phrase or private keys.
-          </p>
-
-          <div class="step-visual">
-            <svg viewBox="0 0 200 140" aria-hidden="true">
-              <rect width="200" height="140" rx="8" fill="#1e212a" />
-              <!-- Mockup of the investigation workspace -->
-              <path d="M20 20 L180 20 L180 120 L20 120 Z" stroke="#3b82f6" stroke-width="1" fill="#0f172a" />
-              <rect x="30" y="30" width="80" height="40" rx="6" stroke="#167568" stroke-width="1" fill="transparent" />
-              <text x="70" y="48" text-anchor="middle" fill="#6b7c84" font-size="9">Website</text>
-              <text x="70" y="58" text-anchor="middle" fill="#6b7c84" font-size="9">Investigation</text>
-              <rect x="30" y="80" width="80" height="25" rx="4" stroke="#167568" stroke-width="1" fill="transparent" />
-              <text x="70" y="97" text-anchor="middle" fill="#6b7c84" font-size="9">Contract</text>
-              <text x="70" y="107" text-anchor="middle" fill="#6b7c84" font-size="9">Analysis</text>
-              <line x1="60" y1="35" x2="60" y2="115" stroke="#6b7c84" stroke-width="1" />
-              <text x="25" y="75" text-end fill="#6b7c84" font-size="9">Optional</text>
-              <text x="175" y="75" text-start fill="#6b7c84" font-size="9">field</text>
-            </svg>
-            <div class="step-visual-label" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--on-muted); pointer-events:none; font-size:10px;">ILLUSTRATIVE PREVIEW of ChainShield workspace</div>
-          </div>
-
-          <div class="step-nav step4-nav">
-            <button class="step4-action-btn secondary" data-step="3" aria-label="Go back to step 3">Review how it works</button>
-            <button class="step4-action-btn" data-onboarding-complete="true" aria-label="Open investigation workspace">Open investigation workspace</button>
-          </div>
-
-          <p class="step4-security-note">
-            <strong>ChainShield provides investigative evidence, not a guarantee of safety.</strong> Never share your wallet recovery phrase or private keys.
-          </p>
-        </div>
-      </main>
-
-      <!-- Investigation workspace shown after onboarding -->
-      <div class="investigation-workspace" id="investigation-workspace" hidden aria-label="ChainShield investigation workspace">
-        <!-- Header -->
-        <header class="brand-header" id="workspace-header">
-          <div class="brand">
+    <div class="app-shell">
+      <section id="onboarding-view" class="onboarding-view" aria-labelledby="step-heading">
+        <header class="topbar">
+          <a class="brand" href="#" aria-label="ChainShield home">
             <span class="brand-mark" aria-hidden="true">C</span>
-            <div class="brand-text">
-              <p class="eyebrow">WEB3 SITE CHECK</p>
-              <h1>ChainShield</h1>
-            </div>
+            <span class="brand-copy">
+              <span class="brand-eyebrow">INVESTIGATE WITH CONTEXT</span>
+              <span class="brand-name">ChainShield</span>
+            </span>
+          </a>
+          <div class="topbar-actions">
+            <span class="step-count" id="step-count">01 <span>/ 04</span></span>
+            <button class="text-button" id="skip-onboarding" type="button">Skip intro</button>
           </div>
-          <button class="btn-secondary" id="close-workspace" aria-label="Close ChainShield workspace">Close</button>
         </header>
 
-        <!-- Workspace shell -->
-        <main class="workspace-shell" id="workspace-shell">
-          <!-- Hero / form section -->
-          <section class="workspace-hero">
-            <h2 class="workspace-heading">Investigate before you interact.</h2>
-            <p class="workspace-subtitle">Enter a website URL and optionally a smart‑contract address to review evidence and limitations.</p>
+        <div class="progress-track" role="progressbar" aria-label="Onboarding progress" aria-valuemin="1" aria-valuemax="4" aria-valuenow="1">
+          <span class="progress-fill" id="progress-fill"></span>
+        </div>
 
-            <form class="workspace-form" id="investigation-form">
-              <div class="form-group">
-                <label for="url-input" class="form-label">Website URL</label>
-                <input type="url" id="url-input" name="url" class="form-input" placeholder="https://example.com" required autocomplete="off">
-              </div>
-
-              <div class="form-group">
-                <label for="contract-input" class="form-label">Optional Ethereum contract address</label>
-                <input type="text" id="contract-input" name="contractAddress" class="form-input" placeholder="0x… (40 hexadecimal characters)" autocomplete="off" spellcheck="false">
-              </div>
-
-              <button type="submit" class="btn-primary">Investigate website</button>
-            </form>
-
-            <p class="workspace-note">ChainShield provides investigative evidence, not a guarantee of safety. Never share your wallet recovery phrase or private keys.</p>
+        <main class="onboarding-main">
+          <section class="onboarding-step active" id="step-1" aria-labelledby="step-heading" aria-hidden="false">
+            <div class="step-copy">
+              <p class="eyebrow"><span class="eyebrow-mark"></span> WEBSITE INVESTIGATION</p>
+              <h1 class="step-heading" id="step-heading">Know what you're opening.</h1>
+              <p class="step-supporting">ChainShield brings public web intelligence, threat-reputation checks, and URL analysis together so you can review evidence before interacting.</p>
+            </div>
+            <div class="step-visual visual-flow" aria-label="Illustration of one website checked by three independent signals">
+              <div class="visual-caption"><span>HOW A WEBSITE CHECK WORKS</span><span>01 / 04</span></div>
+              <svg class="flow-art" viewBox="0 0 720 430" role="img" aria-labelledby="flow-title flow-desc">
+                <title id="flow-title">Website investigation signals</title>
+                <desc id="flow-desc">A website address connects to separate web intelligence, threat reputation, and URL structure checks.</desc>
+                <defs>
+                  <linearGradient id="flowLine" x1="0" x2="1">
+                    <stop offset="0" stop-color="#30c6b0" stop-opacity=".72"/>
+                    <stop offset="1" stop-color="#30c6b0" stop-opacity=".22"/>
+                  </linearGradient>
+                </defs>
+                <rect class="art-input" x="189" y="35" width="342" height="72" rx="16"/>
+                <circle class="art-dot" cx="220" cy="71" r="7"/>
+                <text class="art-label" x="243" y="67">WEBSITE TO REVIEW</text>
+                <text class="art-main" x="243" y="89">https://example.site</text>
+                <path class="art-connector" d="M360 107v51m-222 0h444m-444 0v55m222-55v55m222-55v55"/>
+                <rect class="art-card" x="28" y="213" width="210" height="132" rx="17"/>
+                <rect class="art-icon-box" x="49" y="235" width="38" height="38" rx="11"/>
+                <text class="art-icon" x="68" y="261" text-anchor="middle">01</text>
+                <text class="art-card-title" x="49" y="300">Web intelligence</text>
+                <text class="art-card-note" x="49" y="323">Public sources to review</text>
+                <rect class="art-card" x="255" y="213" width="210" height="132" rx="17"/>
+                <rect class="art-icon-box art-icon-amber" x="276" y="235" width="38" height="38" rx="11"/>
+                <text class="art-icon art-icon-text-amber" x="295" y="261" text-anchor="middle">02</text>
+                <text class="art-card-title" x="276" y="300">Threat reputation</text>
+                <text class="art-card-note" x="276" y="323">Independent URL lookup</text>
+                <rect class="art-card" x="482" y="213" width="210" height="132" rx="17"/>
+                <rect class="art-icon-box art-icon-blue" x="503" y="235" width="38" height="38" rx="11"/>
+                <text class="art-icon art-icon-text-blue" x="522" y="261" text-anchor="middle">03</text>
+                <text class="art-card-title" x="503" y="300">URL structure</text>
+                <text class="art-card-note" x="503" y="323">Local structural signals</text>
+                <text class="art-footnote" x="360" y="391" text-anchor="middle">Independent signals — not a guarantee of safety</text>
+              </svg>
+            </div>
           </section>
 
-          <!-- Results area -->
-          <section class="workspace-results" id="workspace-results" hidden aria-labelledby="results-heading">
-            <h3 id="results-heading">Investigation results</h3>
+          <section class="onboarding-step" id="step-2" aria-labelledby="step-heading-2" aria-hidden="true">
+            <div class="step-copy">
+              <p class="eyebrow"><span class="eyebrow-mark"></span> FOUR INDEPENDENT LENSES</p>
+              <h2 class="step-heading" id="step-heading-2">Look beyond the surface.</h2>
+              <p class="step-supporting">Each check answers a different question. ChainShield keeps the evidence and its limitations distinct instead of blending them into a single verdict.</p>
+              <p class="quiet-note">A missing result is not a clean result. Review what each source actually says.</p>
+            </div>
+            <div class="step-visual visual-signals">
+              <div class="visual-caption"><span>SEPARATE SIGNALS</span><span>NO SINGLE SCORE</span></div>
+              <div class="signal-grid">
+                <article class="signal-tile">
+                  <span class="signal-number">01</span>
+                  <h3>Web intelligence</h3>
+                  <p>TinyFish returns public search results related to the hostname.</p>
+                </article>
+                <article class="signal-tile">
+                  <span class="signal-number signal-amber">02</span>
+                  <h3>Threat reputation</h3>
+                  <p>Google Safe Browsing checks the submitted URL for reported threats.</p>
+                </article>
+                <article class="signal-tile">
+                  <span class="signal-number signal-blue">03</span>
+                  <h3>URL structure</h3>
+                  <p>Local heuristics note selected URL and hostname patterns.</p>
+                </article>
+                <article class="signal-tile">
+                  <span class="signal-number signal-violet">04</span>
+                  <h3>Independent evidence</h3>
+                  <p>Results stay separate so uncertainty is visible, not hidden.</p>
+                </article>
+              </div>
+            </div>
+          </section>
 
-            <div class="results-summary" id="results-summary" hidden></div>
+          <section class="onboarding-step" id="step-3" aria-labelledby="step-heading-3" aria-hidden="true">
+            <div class="step-copy">
+              <p class="eyebrow"><span class="eyebrow-mark"></span> OPTIONAL WEB3 CONTEXT</p>
+              <h2 class="step-heading" id="step-heading-3">Look deeper into Web3.</h2>
+              <p class="step-supporting">Add an Ethereum address to request read-only network details and, when available, inspect verified source and Etherscan-reported proxy implementations.</p>
+              <p class="capability-disclaimer">Detected capabilities are not automatically vulnerabilities. Missing indicators do not prove that a contract is safe.</p>
+            </div>
+            <div class="step-visual visual-contract">
+              <div class="visual-caption"><span>CONCEPTUAL EXAMPLE</span><span>NOT A LIVE SCAN</span></div>
+              <div class="contract-preview">
+                <div class="preview-network">
+                  <span class="network-indicator"></span>
+                  <div><small>NETWORK OBSERVATION</small><strong>Ethereum Mainnet</strong></div>
+                  <span class="preview-readonly">READ ONLY</span>
+                </div>
+                <div class="preview-address"><small>SUBMITTED ADDRESS</small><code>0x…example-address</code></div>
+                <div class="preview-chain">
+                  <div class="chain-layer">
+                    <span class="layer-index">A</span>
+                    <div><strong>Submitted contract</strong><small>Proxy metadata: available</small></div>
+                    <span class="layer-type">PROXY</span>
+                  </div>
+                  <div class="chain-connector"></div>
+                  <div class="chain-layer">
+                    <span class="layer-index layer-index-amber">B</span>
+                    <div><strong>Implementation source</strong><small>Capability indicator: review</small></div>
+                    <span class="layer-type layer-type-amber">SOURCE</span>
+                  </div>
+                </div>
+                <div class="preview-capabilities">
+                  <span><i></i>Minting pattern</span>
+                  <span><i></i>Pause control</span>
+                  <span><i></i>Upgrade metadata</span>
+                </div>
+                <p class="preview-disclaimer">Illustrative only. Capabilities are not proof of malicious behavior.</p>
+              </div>
+            </div>
+          </section>
 
-            <!-- Website intelligence -->
-            <section class="results-section" id="results-website" hidden>
-              <h4>Website intelligence</h4>
-              <div class="results-status" id="results-website-status"></div>
-              <ul class="results-evidence" id="results-website-evidence"></ul>
-            </section>
-
-            <!-- Google Safe Browsing -->
-            <section class="results-section" id="results-sb" hidden>
-              <h4>Google Safe Browsing</h4>
-              <div class="results-status" id="results-sb-status"></div>
-              <ul class="results-evidence" id="results-sb-evidence"></ul>
-            </section>
-
-            <!-- URL structure analysis -->
-            <section class="results-section" id="results-url" hidden>
-              <h4>URL structure analysis</h4>
-              <div class="results-status" id="results-url-status"></div>
-              <ul class="results-evidence" id="results-url-evidence"></ul>
-            </section>
-
-            <!-- Ethereum RPC assessment -->
-            <section class="results-section" id="results-ethereum" hidden>
-              <h4>Ethereum RPC assessment</h4>
-              <div class="results-status" id="results-ethereum-status"></div>
-            </section>
-
-            <!-- Etherscan / contract analysis -->
-            <section class="results-section" id="results-contract" hidden>
-              <h4>Contract analysis</h4>
-              <div class="results-status" id="results-contract-status"></div>
-              <ul class="results-evidence" id="results-contract-evidence"></ul>
-            </section>
+          <section class="onboarding-step" id="step-4" aria-labelledby="step-heading-4" aria-hidden="true">
+            <div class="step-copy">
+              <p class="eyebrow"><span class="eyebrow-mark"></span> YOUR INVESTIGATION WORKSPACE</p>
+              <h2 class="step-heading" id="step-heading-4">Investigate before you interact.</h2>
+              <p class="step-supporting">Enter a website URL, optionally add an Ethereum contract address, then review the available evidence and limitations.</p>
+              <ol class="workflow-list">
+                <li><span>1</span><p><strong>Enter a website URL</strong><small>Website and contract are separate inputs.</small></p></li>
+                <li><span>2</span><p><strong>Optionally add an Ethereum address</strong><small>No wallet connection or transaction is involved.</small></p></li>
+                <li><span>3</span><p><strong>Review each result independently</strong><small>Unavailable or missing checks are not safety verdicts.</small></p></li>
+              </ol>
+            </div>
+            <div class="step-visual visual-workspace">
+              <div class="visual-caption"><span>WORKSPACE PREVIEW</span><span>ILLUSTRATIVE</span></div>
+              <div class="workspace-preview">
+                <div class="preview-brand"><span class="brand-mark brand-mark-small">C</span><strong>ChainShield</strong><span>WEBSITE + WEB3</span></div>
+                <p class="preview-title">Investigate before you interact.</p>
+                <label>Website URL</label>
+                <div class="preview-input">https://your-site.example</div>
+                <label>Optional Ethereum contract address</label>
+                <div class="preview-input preview-input-muted">0x… (40 hexadecimal characters)</div>
+                <div class="preview-button">Investigate website</div>
+                <p class="preview-disclaimer">Preview only — no sample results are shown.</p>
+              </div>
+            </div>
           </section>
         </main>
-      </div>
-    </div>
 
-    <script>
-    // // When the onboarding is complete, we'll navigate to the workspace
-    // The popup.js handles this — this HTML just provides the structure.
-    // The investigation-form submit is handled by popup.js which calls the backend.
-    // 
-    // Key elements referenced in popup.js (ensure IDs match):
-    // - investigation-form (submit handler)
-    // - url-input, contract-input
-    // - results-website-status, results-website-evidence
-    // - results-sb-status, results-sb-evidence
-    // - results-url-status, results-url-evidence
-    // - results-ethereum-status
-    // - results-contract-status, results-contract-evidence
-    // - workspace-shell, workspace-hero, workspace-results
-    // - workspace-heading, workspace-subtitle
-    //
-    // The onboarding JS (same popup.js) manages step navigation and the
-    // 'Open investigation workspace' CTA in step 4.
-    </script>
+        <footer class="onboarding-footer">
+          <button class="button button-quiet" id="back-step" type="button" disabled>Back</button>
+          <p class="footer-note">Evidence to review, not a guarantee of safety.</p>
+          <button class="button button-primary" id="next-step" type="button">Next step <span aria-hidden="true">→</span></button>
+          <button class="button button-primary" id="open-workspace" type="button" hidden>Open investigation workspace <span aria-hidden="true">→</span></button>
+        </footer>
+      </section>
+
+      <section id="workspace-view" class="workspace-view" aria-labelledby="workspace-title" hidden>
+        <header class="topbar workspace-topbar">
+          <a class="brand" href="#" aria-label="ChainShield home">
+            <span class="brand-mark" aria-hidden="true">C</span>
+            <span class="brand-copy">
+              <span class="brand-eyebrow">WEBSITE + WEB3</span>
+              <span class="brand-name">ChainShield</span>
+            </span>
+          </a>
+          <span class="workspace-tag"><span class="eyebrow-mark"></span> INVESTIGATION WORKSPACE</span>
+        </header>
+
+        <main class="workspace-main">
+          <section class="workspace-intro">
+            <p class="eyebrow"><span class="eyebrow-mark"></span> INVESTIGATE WITH CONTEXT</p>
+            <h1 id="workspace-title">Investigate before you interact.</h1>
+            <p>Review public website evidence and independent reputation signals. Add a contract address for optional, read-only Ethereum analysis.</p>
+          </section>
+
+          <form id="investigation-form" class="investigation-form" novalidate>
+            <div class="form-main">
+              <label for="url-input">Website URL <span>REQUIRED</span></label>
+              <div class="input-wrap input-wrap-url">
+                <span class="input-prefix" aria-hidden="true">↗</span>
+                <input id="url-input" name="url" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com" required>
+              </div>
+              <p class="field-hint">Enter the complete website address, including http:// or https://.</p>
+            </div>
+            <div class="form-secondary">
+              <label for="contract-input">Ethereum contract address <span>OPTIONAL</span></label>
+              <div class="input-wrap">
+                <span class="input-prefix input-prefix-eth" aria-hidden="true">◇</span>
+                <input id="contract-input" name="contractAddress" type="text" inputmode="text" maxlength="42" autocomplete="off" spellcheck="false" placeholder="0x… (40 hexadecimal characters)">
+              </div>
+              <p class="field-hint">This address is analyzed separately; its relationship to the website is not verified.</p>
+            </div>
+            <div class="form-submit-row">
+              <button class="button button-primary submit-button" id="investigate-button" type="submit">
+                <span>Investigate website</span><span aria-hidden="true">→</span>
+              </button>
+              <p class="form-readonly-note"><span class="readonly-dot"></span> Read-only checks · No wallet connection</p>
+            </div>
+            <p id="form-message" class="form-message" role="status" aria-live="polite">Results are investigative evidence, not a safety guarantee.</p>
+          </form>
+
+          <section id="results" class="results" aria-labelledby="results-title" hidden>
+            <div class="results-heading">
+              <div>
+                <p class="eyebrow"><span class="eyebrow-mark"></span> INVESTIGATION REPORT</p>
+                <h2 id="results-title">Results</h2>
+              </div>
+              <button id="new-investigation" class="button button-quiet" type="button">New investigation</button>
+            </div>
+            <div class="investigation-context" id="investigation-context"></div>
+            <div class="results-grid">
+              <section id="results-website" class="result-panel result-panel-wide" aria-labelledby="website-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon panel-icon-teal">01</span><div><h3 id="website-heading">Website intelligence</h3><p>Public search evidence</p></div></div>
+                <p class="result-status" id="results-website-status"></p>
+                <div id="results-website-evidence" class="result-content"></div>
+              </section>
+              <section id="results-sb" class="result-panel" aria-labelledby="sb-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon panel-icon-amber">02</span><div><h3 id="sb-heading">Threat reputation</h3><p>Google Safe Browsing</p></div></div>
+                <p class="result-status" id="results-sb-status"></p>
+                <div id="results-sb-evidence" class="result-content"></div>
+              </section>
+              <section id="results-url" class="result-panel" aria-labelledby="url-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon panel-icon-blue">03</span><div><h3 id="url-heading">URL structure</h3><p>Local heuristic signals</p></div></div>
+                <p class="result-status" id="results-url-status"></p>
+                <div id="results-url-evidence" class="result-content"></div>
+              </section>
+              <section id="results-ethereum" class="result-panel" aria-labelledby="ethereum-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon panel-icon-blue">04</span><div><h3 id="ethereum-heading">Ethereum RPC</h3><p>Network and bytecode observation</p></div></div>
+                <p class="result-status" id="results-ethereum-status"></p>
+                <div id="results-ethereum-evidence" class="result-content"></div>
+              </section>
+              <section id="results-contract" class="result-panel result-panel-wide" aria-labelledby="contract-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon panel-icon-amber">05</span><div><h3 id="contract-heading">Smart contract source</h3><p>Etherscan verified source and proxy metadata</p></div></div>
+                <p class="result-status" id="results-contract-status"></p>
+                <div id="results-contract-evidence" class="result-content layer-list"></div>
+              </section>
+            </div>
+          </section>
+        </main>
+
+        <footer class="app-footer">
+          <span>ChainShield · Read-only investigation tools</span>
+          <span>Evidence is not a verdict. No automatic blocking is performed.</span>
+        </footer>
+      </section>
+    </div>
   </body>
 </html>

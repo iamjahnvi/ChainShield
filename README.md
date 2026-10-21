@@ -69,7 +69,7 @@ A normal website investigation and a smart-contract investigation are related, b
 3. The backend validates the submitted URL before passing it to the relevant analysis modules.
 4. TinyFish Search, Google Safe Browsing, and local URL heuristics perform their respective checks.
 5. The backend normalizes and separates their results rather than treating all signals as interchangeable.
-6. The popup presents the returned evidence and assessment details for the user to review.
+6. The ChainShield investigation tab presents the returned evidence and assessment details for the user to review.
 
 ### Smart-contract investigation
 
@@ -90,10 +90,10 @@ flowchart TB
     USER["User"]
     subgraph CHROME["Chrome · Manifest V3"]
         TAB["Active browser tab"]
-        POPUP["ChainShield popup"]
+        APP["ChainShield investigation tab"]
         UI["Investigation results"]
-        TAB --> POPUP
-        POPUP --> UI
+        TAB --> APP
+        APP --> UI
     end
 
     subgraph BACKEND["Node.js + Express backend"]
@@ -133,7 +133,7 @@ flowchart TB
     ES["Etherscan API V2"]
 
     USER --> TAB
-    POPUP -->|"POST /api/investigations"| API
+    APP -->|"POST /api/investigations"| API
     TINY <-->|"HTTPS search request / results"| TF
     SAFE <-->|"HTTPS URL lookup / result"| GSB
     RPC <-->|"Read-only JSON-RPC"| ETH
@@ -410,13 +410,13 @@ A successful health response confirms that the backend is responding. It does no
 2. Enable **Developer mode**.
 3. Select **Load unpacked**.
 4. Choose the repository's `extension` folder.
-5. Open a normal HTTP or HTTPS website.
-6. Open ChainShield from Chrome's Extensions menu.
+5. Click the ChainShield toolbar icon. It opens the app in a dedicated browser tab rather than a small popup.
+6. On first launch, complete or skip the four-step introduction to reach the investigation workspace. Later launches open the workspace directly.
 7. Start an investigation and review the returned results.
 
 For Web3 testing, enter a valid Ethereum contract address in the optional contract-analysis field.
 
-After editing extension files, return to `chrome://extensions`, reload ChainShield, and reopen the popup.
+After editing extension files, return to `chrome://extensions`, reload ChainShield, and click the toolbar icon again. Keep the local backend running while investigating.
 
 ---
 

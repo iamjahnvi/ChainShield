@@ -1,563 +1,523 @@
-// ============================================================
-// ChainShield — Onboarding & Investigation Workspace
-// Preserves all existing backend integrations:
-//   - TinyFish web intelligence
-//   - Google Safe Browsing
-//   - URL structure analysis
-//   - Ethereum JSON-RPC checks
-//   - Etherscan verified-source and proxy-chain analysis
-// ============================================================
+const API_URL = "http://localhost:3000/api/investigations";
+const ONBOARDING_KEY = "chainShieldOnboardingComplete";
+const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
-/* ---- Global state ---- */
+const onboardingView = document.getElementById("onboarding-view");
+const workspaceView = document.getElementById("workspace-view");
+const onboardingSteps = Array.from(document.querySelectorAll(".onboarding-step"));
+const stepCount = document.getElementById("step-count");
+const progressTrack = document.querySelector(".progress-track");
+const progressFill = document.getElementById("progress-fill");
+const backButton = document.getElementById("back-step");
+const nextButton = document.getElementById("next-step");
+const openWorkspaceButton = document.getElementById("open-workspace");
+const skipButton = document.getElementById("skip-onboarding");
+const investigationForm = document.getElementById("investigation-form");
+const urlInput = document.getElementById("url-input");
+const contractInput = document.getElementById("contract-input");
+const submitButton = document.getElementById("investigate-button");
+const formMessage = document.getElementById("form-message");
+const results = document.getElementById("results");
+const newInvestigationButton = document.getElementById("new-investigation");
+const investigationContext = document.getElementById("investigation-context");
+
 let currentStep = 1;
-const totalSteps = 4;
-let workspaceOpened = false; // prevent duplicate open
+let requestInProgress = false;
+let requestSequence = 0;
 
-/* ---- DOM elements (onboarding) ---- */
-const onboardingContainer = document.getElementById('onboarding-container');
-const onboardingSteps = document.getElementById('onboarding-steps');
-const steps = document.querySelectorAll('.onboarding-step');
-const progressSteps = document.querySelectorAll('.progress-step');
-const brandHeader = document.getElementById('brand-header');
-const skipOnboardingBtn = document.getElementById('skip-onboarding');
-const investigateCTA = document.querySelector('.investigation-cta .btn-primary');
-const investigationWorkspace = document.getElementById('investigation-workspace');
-const workspaceShell = document.getElementById('workspace-shell');
-const workspaceResults = document.getElementById('workspace-results');
-const investigationForm = document.getElementById('investigation-form');
-const urlInput = document.getElementById('url-input');
-const contractInput = document.getElementById('contract-input');
-
-/* ---- DOM elements (investigation) ---- */
-const resultsWebsite = document.getElementById('results-website');
-const resultsWebsiteStatus = document.getElementById('results-website-status');
-const resultsWebsiteEvidence = document.getElementById('results-website-evidence');
-const resultsSB = document.getElementById('results-sb');
-const resultsSBStatus = document.getElementById('results-sb-status');
-const resultsSBEvidence = document.getElementById('results-sb-evidence');
-const resultsURL = document.getElementById('results-url');
-const resultsURLStatus = document.getElementById('results-url-status');
-const resultsULEvidence = document.getElementById('results-url-evidence');
-const resultsEthereum = document.getElementById('results-ethereum');
-const resultsEthereumStatus = document.getElementById('results-ethereum-status');
-const resultsContract = document.getElementById('results-contract');
-const resultsContractStatus = document.getElementById('results-contract-status');
-const resultsContractEvidence = document.getElementById('results-contract-evidence');
-const resultsSummary = document.getElementById('results-summary');
-const workspaceHeading = document.querySelector('.workspace-heading');
-const workspaceSubtitle = document.querySelector('.workspace-subtitle');
-
-/* ---- Step navigation ---- */
 function showStep(stepNumber) {
-  if (stepNumber < 1 || stepNumber > totalSteps) return;
-
-  currentStep = stepNumber;
-
-  // Hide all steps
-  steps.forEach(step => {
-    step.classList.remove('active');
-    step.setAttribute('aria-hidden', 'true');
+  currentStep = Math.min(Math.max(stepNumber, 1), onboardingSteps.length);
+  onboardingSteps.forEach((step, index) => {
+    const active = index + 1 === currentStep;
+    step.classList.toggle("active", active);
+    step.setAttribute("aria-hidden", String(!active));
   });
 
-  // Show the target step
-  const targetStep = document.getElementById(`step-${stepNumber}`);
-  if (targetStep) {
-    targetStep.classList.add('active');
-    targetStep.removeAttribute('aria-hidden');
-  }
-
-  // Update progress indicator
-  progressSteps.forEach((step, index) => {
-    if (index + 1 === stepNumber) {
-      step.classList.add('active');
-      step.classList.remove('done');
-    } else if (index < stepNumber - 1) {
-      step.classList.add('done');
-      step.classList.remove('active');
-    } else {
-      step.classList.remove('done');
-      step.classList.remove('active');
-    }
-  });
-
-  // Update step number text
-  const stepNumberElements = document.querySelectorAll('.step-number');
-  stepNumberElements.forEach(el => {
-    el.textContent = stepNumber;
-  });
-
-  // Update heading aria-label
-  const stepHeading = document.querySelector('.step-heading');
-  if (stepHeading) {
-    stepHeading.setAttribute('aria-label', `Step ${stepNumber} of ${totalSteps}`);
-  }
-
-  // Update navigation button visibility
-  const backBtns = document.querySelectorAll('.step-nav-button[data-step="1"]');
-  const nextBtns = document.querySelectorAll('.step-nav-button[data-step="2"]');
-  const reviewBtns = document.querySelectorAll('.step4-action-btn.secondary');
-  const openBtns = document.querySelectorAll('.step4-action-btn[data-onboarding-complete="true"]');
-
-  // Back buttons: hide on step 1, show otherwise
-  backBtns.forEach(btn => {
-    btn.style.display = stepNumber === 1 ? 'none' : 'inline-block';
-    btn.disabled = stepNumber <= 1;
-  });
-
-  // Next/Review buttons
-  nextBtns.forEach(btn => {
-    btn.style.display = stepNumber < totalSteps ? 'inline-block' : 'none';
-    btn.disabled = stepNumber >= totalSteps;
-  });
-
-  reviewBtns.forEach(btn => {
-    btn.style.display = stepNumber === totalSteps ? 'inline-block' : 'none';
-  });
-
-  openBtns.forEach(btn => {
-    btn.style.display = stepNumber === totalSteps ? 'inline-block' : 'none';
-  });
+  const activeHeading = onboardingSteps[currentStep - 1].querySelector("h1, h2");
+  onboardingView.setAttribute("aria-labelledby", activeHeading.id);
+  clear(stepCount);
+  stepCount.append(
+    document.createTextNode(String(currentStep).padStart(2, "0")),
+    element("span", "", `/ ${String(onboardingSteps.length).padStart(2, "0")}`)
+  );
+  progressTrack.setAttribute("aria-valuenow", String(currentStep));
+  progressFill.style.width = `${(currentStep / onboardingSteps.length) * 100}%`;
+  backButton.disabled = currentStep === 1;
+  nextButton.hidden = currentStep === onboardingSteps.length;
+  openWorkspaceButton.hidden = currentStep !== onboardingSteps.length;
 }
 
-/* ---- Onboarding event delegation ---- */
-onboardingSteps.addEventListener('click', (event) => {
-  const button = event.target.closest('button.step-nav-button');
-  if (!button) return;
+function openWorkspace() {
+  localStorage.setItem(ONBOARDING_KEY, "true");
+  onboardingView.hidden = true;
+  workspaceView.hidden = false;
+  urlInput.focus();
+}
 
-  const step = parseInt(button.dataset.step, 10);
-  if (step >= 1 && step < totalSteps) {
-    showStep(step);
+function setFormMessage(message, state = "") {
+  formMessage.textContent = message;
+  if (state) {
+    formMessage.dataset.state = state;
+  } else {
+    delete formMessage.dataset.state;
   }
-});
-
-/* ---- Step 4: Open investigation workspace ---- */
-const openStep4Btns = onboardingSteps.querySelectorAll('.step4-action-btn[data-onboarding-complete="true"]');
-openStep4Btns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    // Hide onboarding, show workspace
-    onboardingContainer.classList.add('onboarding-hidden');
-    investigationWorkspace.hidden = false;
-    investigationWorkspace.setAttribute('aria-hidden', 'false');
-    workspaceOpened = true;
-
-    // Focus the URL input
-    if (urlInput) {
-      urlInput.focus();
-    }
-  });
-});
-
-/* ---- "Skip onboarding" ---- */
-if (skipOnboardingBtn) {
-  skipOnboardingBtn.addEventListener('click', () => {
-    onboardingContainer.classList.add('onboarding-hidden');
-    investigationWorkspace.hidden = false;
-    investigationWorkspace.setAttribute('aria-hidden', 'false');
-    workspaceOpened = true;
-    if (urlInput) {
-      urlInput.focus();
-    }
-  });
 }
 
-/* ---- Keyboard navigation (ArrowLeft/ArrowRight) ---- */
-document.addEventListener('keydown', (event) => {
-  // Only navigate when onboarding is visible and not in a form
-  const isFormElement =
-    event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA');
-
-  if (!isFormElement && onboardingContainer && !onboardingContainer.classList.contains('onboarding-hidden') && currentStep) {
-    if (event.key === 'ArrowRight') {
-      event.preventDefault();
-      if (currentStep < totalSteps) {
-        showStep(currentStep + 1);
-      }
-    }
-    if (event.key === 'ArrowLeft') {
-      event.preventDefault();
-      if (currentStep > 1) {
-        showStep(currentStep - 1);
-      }
-    }
+function element(tagName, className, text) {
+  const node = document.createElement(tagName);
+  if (className) {
+    node.className = className;
   }
-});
-
-/* ---- Investigation form submission ---- */
-if (investigationForm) {
-  investigationForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
-    const url = urlInput.value.trim();
-    const contractAddress = contractInput.value.trim();
-
-    // Basic validation already present in the original handler
-    if (!url || url === '') {
-      setMessage('A website URL is required.', 'error');
-      return;
-    }
-
-    // Validate URL protocol
-    let supported = false;
-    try {
-      const parsed = new URL(url);
-      supported = parsed.protocol === 'http:' || parsed.protocol === 'https:';
-    } catch {
-      // fall through
-    }
-    if (!supported) {
-      setMessage('Only HTTP and HTTPS URLs are supported.', 'error');
-      return;
-    }
-
-    // Show loading state
-    const submitBtn = investigationForm.querySelector('button[type="submit"]');
-    const originalBtnText = submitBtn ? submitBtn.textContent : 'Investigate website';
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Investigating…';
-    }
-
-    setMessage(`Searching the web for public sources about ${new URL(url).hostname}…`, 'loading');
-
-    try {
-      const response = await fetch('http://localhost:3000/api/investigations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, contractAddress })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Validate response shape (preserve existing checks)
-      if (!data || typeof data !== 'object' || Array.isArray(data)) {
-        throw new Error('The server returned an invalid response.');
-      }
-      if (
-        !['research_available', 'no_results'].includes(data.status) ||
-        typeof data.summary !== 'string' ||
-        !Array.isArray(data.evidence) ||
-        typeof data.domain !== 'string'
-      ) {
-        throw new Error('The server response was missing expected investigation details.');
-      }
-
-      // Hide workspace form, show results
-      investigationForm.hidden = true;
-      workspaceResults.hidden = false;
-      workspaceResults.setAttribute('aria-hidden', 'false');
-
-      // Render results using existing display functions
-      renderResults(data);
-    } catch (error) {
-      console.error('Investigation error:', error);
-      setMessage(error instanceof Error ? error.message : 'Something went wrong while contacting the server.', 'error');
-
-      // Re-enable button
-      const submitBtn = investigationForm.querySelector('button[type="submit"]');
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Investigate website';
-      }
-    }
-  });
+  if (text !== undefined && text !== null) {
+    node.textContent = String(text);
+  }
+  return node;
 }
 
-/* ---- Render results using existing display logic ---- */
-function renderResults(data) {
-  // Website intelligence
-  renderWebsiteResults(data);
-
-  // Google Safe Browsing
-  renderSBResults(data.threatAssessment);
-
-  // URL structure analysis
-  renderURLResults(data.urlSignals);
-
-  // Ethereum RPC assessment
-  renderEthereumResults(data.ethereumAssessment);
-
-  // Etherscan / contract analysis
-  renderContractResults(data.contractAnalysis);
-
-  // Summary
-  renderSummary(data);
+function clear(node) {
+  node.replaceChildren();
 }
 
-/* ---- Website intelligence results ---- */
+function setResultStatus(id, message, tone = "") {
+  const node = document.getElementById(id);
+  node.textContent = message;
+  if (tone) {
+    node.dataset.tone = tone;
+  } else {
+    delete node.dataset.tone;
+  }
+}
+
+function addRow(container, label, value) {
+  if (value === undefined || value === null || value === "") {
+    return;
+  }
+  const row = element("div", "ethereum-row");
+  row.append(element("strong", "", label), element("span", "", value));
+  container.append(row);
+}
+
+function safeHttpUrl(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function renderWebsiteResults(data) {
-  resultsWebsite.hidden = false;
-  resultsWebsiteStatus.hidden = false;
+  const panel = document.getElementById("results-website");
+  const evidenceContainer = document.getElementById("results-website-evidence");
+  panel.hidden = false;
+  clear(evidenceContainer);
+  setResultStatus("results-website-status", data.summary || "Website search completed.");
 
-  const domainSpecificCount = data.evidence.filter(
-    (entry) => entry.category === 'domain_specific'
-  ).length;
-
-  if (data.status === 'no_results') {
-    resultsWebsiteStatus.textContent = 'Web search found no sources — this is not a safety verdict.';
-    resultsWebsiteEvidence.innerHTML = '<li>No public sources were returned for this website.</li>';
-  } else {
-    resultsWebsiteStatus.textContent = 'Web search sources — not a verified security finding.';
-    const domainSpecificEntries = data.evidence.filter(
-      (entry) => entry.category === 'domain_specific'
+  if (!Array.isArray(data.evidence) || data.evidence.length === 0) {
+    evidenceContainer.append(
+      element(
+        "p",
+        "result-content",
+        "No public search evidence was returned. This does not establish that the website is safe."
+      )
     );
-
-    if (domainSpecificEntries.length > 0) {
-      resultsWebsiteEvidence.innerHTML = domainSpecificEntries
-        .map(
-          (entry) => `<li>
-            <strong>${typeof entry.title === 'string' && entry.title.trim() ? entry.title.trim() : ''}</strong>
-            ${entry.url ? `<a href="${entry.url}" target="_blank" rel="noopener noreferrer"> ${entry.url}</a>` : ''}
-            ${typeof entry.snippet === 'string' && entry.snippet.trim()
-              ? `<p class="evidence-snippet">${entry.snippet.trim()}</p>`
-              : ''}
-          </li>`
-        )
-        .join('');
-    } else {
-      resultsWebsiteEvidence.innerHTML = '<li>No domain-specific sources were found.</li>';
-    }
-  }
-}
-
-/* ---- Google Safe Browsing results ---- */
-function renderSBResults(assessment) {
-  resultsSB.hidden = false;
-  resultsSBStatus.hidden = false;
-
-  if (!assessment || typeof assessment !== 'object') {
-    resultsSBStatus.textContent = 'Threat assessment unavailable.';
-    resultsSBEvidence.innerHTML = '<li>Threat assessment unavailable: the server response omitted this result.</li>';
     return;
   }
 
-  const providers = assessment.providers || [];
-  const statusMessages = {
-    reported: 'Google Safe Browsing reports a possible threat for the submitted URL.',
-    no_match: 'Google Safe Browsing returned no match for the submitted URL. This does not mean the website is safe.',
-    incomplete: 'The threat check is incomplete; not all requested checks produced a result.',
-    unavailable: 'Google Safe Browsing could not complete this lookup.'
-  };
-
-  if (providers.length > 0) {
-    const provider = providers[0];
-    const matches = provider.matches || [];
-
-    if (matches.length > 0) {
-      resultsSBStatus.textContent = statusMessages.reported;
-      const matchList = matches
-        .slice(0, 3) // show max 3
-        .map(
-          (match, i) =>
-            `<li class="threat-match" key=${i}>Reported indicator: ${formatThreatType(
-              match.threatType
-            )}</li>`
-        )
-        .join('');
-      resultsSBEvidence.innerHTML = `<ul>${matchList}</ul>`;
-    } else {
-      resultsSBStatus.textContent = statusMessages.no_match;
-      resultsSBEvidence.innerHTML = '<li>No match found for the submitted URL.</li>';
+  data.evidence.forEach((entry) => {
+    const item = element("article", "evidence-item");
+    item.append(element("div", "evidence-title", entry.title || "Untitled source"));
+    const linkUrl = safeHttpUrl(entry.url);
+    if (linkUrl) {
+      const link = element("a", "evidence-link", linkUrl);
+      link.href = linkUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      item.append(link);
+    } else if (entry.url) {
+      item.append(element("p", "evidence-meta", entry.url));
     }
+    if (entry.snippet) {
+      item.append(element("p", "evidence-snippet", entry.snippet));
+    }
+    const categoryLabels = {
+      domain_specific: "Domain-specific",
+      general_information: "General information",
+      irrelevant_or_unclear: "Irrelevant or unclear"
+    };
+    const metadata = [];
+    if (entry.category) {
+      metadata.push(categoryLabels[entry.category] || entry.category);
+    }
+    if (entry.source) {
+      metadata.push(`Source: ${entry.source}`);
+    }
+    if (Number.isInteger(entry.position)) {
+      metadata.push(`Position: ${entry.position}`);
+    }
+    if (entry.siteName) {
+      metadata.push(`Site: ${entry.siteName}`);
+    }
+    if (metadata.length > 0) {
+      item.append(element("p", "evidence-meta", metadata.join(" · ")));
+    }
+    if (entry.categoryReason) {
+      item.append(element("p", "evidence-reason", entry.categoryReason));
+    }
+    evidenceContainer.append(item);
+  });
+}
+
+function renderSafeBrowsing(assessment) {
+  const panel = document.getElementById("results-sb");
+  const content = document.getElementById("results-sb-evidence");
+  panel.hidden = false;
+  clear(content);
+  const status = assessment && assessment.status;
+
+  if (!assessment || status === "unavailable") {
+    setResultStatus("results-sb-status", "Threat reputation check is unavailable.", "warning");
+  } else if (status === "reported") {
+    setResultStatus("results-sb-status", "Google Safe Browsing reported a match for the submitted URL.", "warning");
+  } else if (status === "no_match") {
+    setResultStatus("results-sb-status", "No match was returned for the submitted URL. This is not a guarantee of safety.");
   } else {
-    resultsSBStatus.textContent = statusMessages.unavailable;
-    resultsSBEvidence.innerHTML = '<li>Threat check unavailable.</li>';
-  }
-}
-
-/* ---- URL structure analysis results ---- */
-function renderURLResults(findings) {
-  resultsURL.hidden = false;
-  resultsURLStatus.hidden = false;
-
-  if (!findings || findings.length === 0) {
-    resultsURLStatus.textContent = 'No structural URL signals were found.';
-    resultsULEvidence.innerHTML = '<li>No structural URL signals were found.</li>';
-    return;
+    setResultStatus("results-sb-status", `Threat reputation status: ${status || "unknown"}.`);
   }
 
-  resultsURLStatus.textContent = 'URL structure signals found.';
-
-  const list = findings
-    .map(
-      (finding) => {
-        const ruleName =
-          typeof finding.ruleId === 'string'
-            ? finding.ruleId.replace(/_/g, ' ')
-            : 'URL signal';
-        const severity =
-          typeof finding.severity === 'string' ? finding.severity : 'review';
-
-        return `<li class="url-signal-item">
-          <p class="url-signal-heading"><strong>${ruleName} (${severity})</strong></p>
-          ${typeof finding.explanation === 'string' && finding.explanation.trim()
-            ? `<p class="url-signal-explanation">${finding.explanation.trim()}</p>`
-            : ''}
-          ${finding.observedFeature &&
-          typeof finding.observedFeature === 'object' &&
-          typeof finding.observedFeature.value === 'string'
-            ? `<p class="url-signal-observed">${finding.observedFeature.label}: ${finding.observedFeature.value}</p>`
-            : ''}
-        </li>`;
-      }
-    )
-    .join('');
-
-  resultsULEvidence.innerHTML = `<ul>${list}</ul>`;
-}
-
-/* ---- Ethereum RPC assessment results ---- */
-function renderEthereumResults(assessment) {
-  resultsEthereum.hidden = false;
-
-  if (!assessment || assessment.status === 'not_requested') {
-    resultsEthereumStatus.textContent = 'Not requested — no contract address supplied.';
-    return;
-  }
-
-  if (assessment.status === 'unavailable') {
-    resultsEthereumStatus.textContent = 'Ethereum RPC could not complete this read-only check.';
-    return;
-  }
-
-  if (assessment.status === 'available') {
-    const fields = [
-      ['Address', assessment.address],
-      ['Chain ID', assessment.chainId],
-      ['Latest block', assessment.latestBlock],
-      [
-        'Code at latest block',
-        assessment.codeStatus === 'bytecode_present'
-          ? 'Bytecode present'
-          : assessment.codeStatus === 'no_bytecode'
-            ? 'No bytecode returned'
-            : 'Unavailable'
-      ]
-    ];
-
-    resultsEthereumStatus.textContent = 'Ethereum RPC assessment';
-    resultsEthereumStatus.innerHTML = fields
-      .map(([label, value]) => `<p><strong>${label}:</strong> ${value}</p>`)
-      .join('');
-    return;
-  }
-
-  resultsEthereumStatus.textContent = 'Ethereum RPC assessment unavailable.';
-}
-
-/* ---- Contract analysis results ---- */
-function renderContractResults(analysis) {
-  resultsContract.hidden = false;
-  resultsContractStatus.hidden = false;
-
-  if (!analysis) {
-    resultsContractStatus.textContent = 'No contract analysis performed.';
-    resultsContractEvidence.innerHTML = '<li>No contract analysis performed.</li>';
-    return;
-  }
-
-  const statusMessages = {
-    available: 'Verified source was retrieved and analyzed.',
-    unverified: 'Etherscan does not provide verified source for this address.',
-    unsupported_chain: 'Source analysis currently supports Ethereum Mainnet only.',
-    unavailable: 'Verified source analysis could not be completed.',
-    incomplete: 'Only part of the contract source or proxy analysis was available.'
-  };
-
-  resultsContractStatus.textContent = statusMessages[analysis.status] || statusMessages.unavailable;
-
-  if (analysis.status === 'available' || analysis.status === 'incomplete') {
-    // Render key details
-    const detailItems = [];
-    detailItems.push(`<p><strong>Chain ID:</strong> ${analysis.chainId}</p>`);
-    detailItems.push(`<p><strong>Network:</strong> ${analysis.network}</p>`);
-    detailItems.push(`<p><strong>Source verified:</strong> ${analysis.sourceVerified !== undefined ? analysis.sourceVerified ? 'Yes' : 'No' : 'Not retrieved'}</p>`);
-    detailItems.push(`<p><strong>Contract:</strong> ${analysis.contractName || 'Unnamed'}</p>`);
-
-    if (analysis.reason) {
-      detailItems.push(`<p><strong>Limitation:</strong> ${analysis.reason}</p>`);
-    }
-
-    // Render layers
-    if (Array.isArray(analysis.layers) && analysis.layers.length > 0) {
-      detailItems.push('<h5>Layers</h5><ul>');
-      analysis.layers.forEach((layer, i) => {
-        detailItems.push(
-          `<li><strong>Layer ${i + 1}:</strong> ${layer.address ||
-            'unknown'} — ${layer.status ||
-            'unknown'} — ${layer.proxyStatus || 'unknown'}</li>`
-        );
-        if (layer.reason) {
-          detailItems.push(`<span class="muted">${layer.reason}</span>`);
-        }
-      });
-      detailItems.push('</ul>');
-    }
-
-    resultsContractEvidence.innerHTML = detailItems.join('');
-  } else {
-    resultsContractEvidence.innerHTML = '<li>Contract analysis not available.</li>';
-  }
-}
-
-/* ---- Summary results ---- */
-function renderSummary(data) {
-  if (resultsSummary) {
-    resultsSummary.hidden = false;
-    const domainSpecificCount = data.evidence.filter(
-      (entry) => entry.category === 'domain_specific'
-    ).length;
-    const hasEvidence = data.evidence.length > 0;
-
-    if (data.status === 'no_results') {
-      resultsSummary.textContent = 'Web search found no sources — this is not a safety verdict.';
-    } else if (hasEvidence && domainSpecificCount > 0) {
-      resultsSummary.textContent = `${domainSpecificCount} source${
-        domainSpecificCount === 1 ? '' : 's'
-      } related to ${data.domain}. Relevance is not proof of malicious activity.`;
-    } else {
-      resultsSummary.textContent = data.summary || 'Investigation complete.';
-    }
-  }
-}
-
-/* ---- Helper: format threat type ---- */
-function formatThreatType(value) {
-  if (value === 'SOCIAL_ENGINEERING') {
-    return 'potential phishing or social engineering';
-  }
-  if (value === 'MALWARE') {
-    return 'malware';
-  }
-  return 'potential threat';
-}
-
-/* ---- Initialize on DOM content ---- */
-document.addEventListener('DOMContentLoaded', () => {
-  // Show step 1
-  showStep(1);
-
-  // Keyboard focus management for the brand header CTA
-  if (skipOnboardingBtn) {
-    skipOnboardingBtn.addEventListener('click', () => {
-      onboardingContainer.classList.add('onboarding-hidden');
-      investigationWorkspace.hidden = false;
-      investigationWorkspace.setAttribute('aria-hidden', 'false');
-      workspaceOpened = true;
-      if (urlInput) {
-        urlInput.focus();
-      }
+  const providers = Array.isArray(assessment?.providers) ? assessment.providers : [];
+  providers.forEach((provider) => {
+    const matches = Array.isArray(provider.matches) ? provider.matches : [];
+    matches.forEach((match) => {
+      const parts = [
+        match.threatType && `Threat type: ${match.threatType}`,
+        match.platformType && `Platform: ${match.platformType}`,
+        match.threatEntryType && `Entry type: ${match.threatEntryType}`
+      ].filter(Boolean);
+      content.append(element("p", "evidence-snippet", parts.join(" · ") || "A threat match was reported."));
     });
+    if (provider.reason) {
+      content.append(element("p", "evidence-meta", `Unavailable reason: ${provider.reason}`));
+    }
+  });
+  if (status === "unavailable" && content.childElementCount === 0) {
+    content.append(element("p", "result-content", "No additional provider details were available."));
+  }
+}
+
+function renderUrlSignals(urlSignals) {
+  const panel = document.getElementById("results-url");
+  const content = document.getElementById("results-url-evidence");
+  panel.hidden = false;
+  clear(content);
+  const findings = Array.isArray(urlSignals?.findings) ? urlSignals.findings : [];
+
+  if (findings.length === 0) {
+    setResultStatus("results-url-status", "No configured URL-structure indicators were found.");
+    content.append(element("p", "result-content", "The local checks cover selected patterns only and do not establish that a URL is safe."));
+    return;
   }
 
-  // Ensure first form element gets focus if navigating via keyboard
-  const firstFocusable = document.querySelector('input, button');
-  if (firstFocusable) {
-    // Don't auto-focus on load; let the user decide
+  setResultStatus("results-url-status", `${findings.length} URL-structure signal${findings.length === 1 ? "" : "s"} returned.`, "warning");
+  findings.forEach((finding) => {
+    const item = element("article", "signal-item");
+    item.append(element("div", "signal-title", finding.title || finding.ruleId || "URL signal"));
+    if (finding.severity) {
+      item.append(element("span", "signal-observed", `Severity: ${finding.severity}`));
+    }
+    if (finding.description) {
+      item.append(element("p", "evidence-snippet", finding.description));
+    }
+    if (finding.evidence) {
+      item.append(element("p", "signal-observed", finding.evidence));
+    }
+    content.append(item);
+  });
+}
+
+function renderEthereumAssessment(assessment) {
+  const panel = document.getElementById("results-ethereum");
+  const content = document.getElementById("results-ethereum-evidence");
+  if (!assessment || assessment.status === "not_requested") {
+    panel.hidden = true;
+    return;
   }
+
+  panel.hidden = false;
+  clear(content);
+  const tone = assessment.status === "available" ? "" : "warning";
+  setResultStatus(
+    "results-ethereum-status",
+    assessment.status === "available"
+      ? "Read-only Ethereum RPC observations are available."
+      : `Ethereum RPC assessment is ${assessment.status || "unavailable"}${assessment.reason ? ` (${assessment.reason})` : ""}.`,
+    tone
+  );
+
+  addRow(content, "Address", assessment.address);
+  addRow(content, "Chain ID", assessment.chainId);
+  addRow(content, "Latest block", assessment.latestBlock);
+  if (assessment.codeStatus === "bytecode_present") {
+    addRow(content, "Bytecode", "Present at the queried address");
+  } else if (assessment.codeStatus === "no_bytecode") {
+    addRow(content, "Bytecode", "No bytecode returned");
+    content.append(element("p", "evidence-meta", "No bytecode alone does not prove this is an externally owned account; it may also reflect an undeployed address or network context."));
+  }
+}
+
+const STATUS_LABELS = {
+  available: "Available",
+  incomplete: "Incomplete",
+  unavailable: "Unavailable",
+  unverified: "Unverified",
+  unsupported_chain: "Unsupported chain",
+  malformed: "Malformed response",
+  cycle: "Cycle detected",
+  hop_limit: "Hop limit reached"
+};
+
+function renderCapabilities(container, capabilities) {
+  if (!Array.isArray(capabilities) || capabilities.length === 0) {
+    return;
+  }
+  const list = element("ul", "capability-list");
+  capabilities.forEach((capability) => {
+    const item = element("li", "capability-item");
+    item.append(element("div", "capability-name", capability.name || "Capability indicator"));
+    const state = element("span", "capability-state", capability.status || "unknown");
+    if (["detected", "unknown"].includes(capability.status)) {
+      state.dataset.status = capability.status;
+    }
+    item.append(state);
+    if (Array.isArray(capability.evidence)) {
+      capability.evidence.forEach((evidence) => {
+        item.append(element("p", "capability-evidence", evidence));
+      });
+    }
+    if (capability.explanation) {
+      item.append(element("p", "capability-evidence", capability.explanation));
+    }
+    if (capability.limitation) {
+      item.append(element("p", "capability-limit", capability.limitation));
+    }
+    list.append(item);
+  });
+  container.append(list);
+}
+
+function renderContractAnalysis(analysis) {
+  const panel = document.getElementById("results-contract");
+  const content = document.getElementById("results-contract-evidence");
+  if (!analysis) {
+    panel.hidden = true;
+    return;
+  }
+
+  panel.hidden = false;
+  clear(content);
+  const statusText = STATUS_LABELS[analysis.status] || analysis.status || "Unknown";
+  const tone = analysis.status === "available" ? "" : "warning";
+  setResultStatus(
+    "results-contract-status",
+    `${statusText}${analysis.network ? ` · ${analysis.network}` : ""}${analysis.chainId ? ` · chain ID ${analysis.chainId}` : ""}`,
+    tone
+  );
+  if (analysis.message) {
+    content.append(element("p", "analysis-reason", analysis.message));
+  }
+  if (analysis.reason) {
+    content.append(element("p", "evidence-meta", `Stopping or limitation reason: ${analysis.reason}`));
+  }
+  if (analysis.status === "unsupported_chain") {
+    content.append(element("p", "result-content", "Source analysis is currently limited to Ethereum Mainnet. The network could not be treated as supported based on the submitted address alone."));
+  }
+  if (analysis.status === "unavailable" && analysis.reason === "rpc_chain_unavailable") {
+    content.append(element("p", "result-content", "The RPC network check did not confirm a chain, so source analysis was not attempted."));
+  }
+
+  if (!Array.isArray(analysis.layers) || analysis.layers.length === 0) {
+    if (analysis.sourceVerified === false || analysis.status === "unverified") {
+      content.append(element("p", "result-content", "Verified source was not available for the submitted address."));
+    }
+    return;
+  }
+
+  analysis.layers.forEach((layer, index) => {
+    const layerCard = element("article", "contract-layer");
+    const heading = element("div", "layer-heading");
+    const identity = element("div");
+    identity.append(
+      element("h4", "", layer.contractName || (index === 0 ? "Submitted contract" : `Implementation layer ${index}`)),
+      element("p", "layer-address", layer.address || "Address unavailable")
+    );
+    heading.append(identity);
+
+    const badges = element("div", "layer-badges");
+    const statusBadge = element("span", "status-badge", STATUS_LABELS[layer.status] || layer.status || "Unknown");
+    statusBadge.dataset.tone = layer.status === "available"
+      ? "good"
+      : ["unavailable", "malformed"].includes(layer.status)
+        ? "error"
+        : "warning";
+    badges.append(statusBadge);
+    const proxyLabel = layer.proxyStatus === "proxy"
+      ? "Proxy"
+      : layer.proxyStatus === "not_proxy"
+        ? "Not identified as proxy"
+        : layer.proxyStatus || "Proxy status unknown";
+    badges.append(element("span", "status-badge", proxyLabel));
+    const verifiedLabel = layer.sourceVerified === true
+      ? "Source verified"
+      : layer.sourceVerified === false
+        ? "Source unverified"
+        : "Verification unknown";
+    badges.append(element("span", "status-badge", verifiedLabel));
+    heading.append(badges);
+    layerCard.append(heading);
+
+    const meta = element("div", "layer-meta");
+    if (layer.reason) {
+      meta.append(element("span", "", `Reason: ${layer.reason}`));
+    }
+    if (layer.implementationAddress) {
+      layerCard.append(
+        element("p", "layer-next", `Explorer-reported next implementation: ${layer.implementationAddress}`)
+      );
+    }
+    layerCard.append(meta);
+    renderCapabilities(layerCard, layer.capabilities);
+    content.append(layerCard);
+  });
+}
+
+function renderResults(data, submittedUrl, contractAddress) {
+  clear(investigationContext);
+  const context = element("span");
+  context.append(element("strong", "", "Website: "), document.createTextNode(submittedUrl));
+  if (contractAddress) {
+    context.append(document.createElement("br"), element("strong", "", "Contract: "), document.createTextNode(contractAddress));
+  }
+  investigationContext.append(context);
+  renderWebsiteResults(data);
+  renderSafeBrowsing(data.threatAssessment);
+  renderUrlSignals(data.urlSignals);
+  renderEthereumAssessment(data.ethereumAssessment);
+  renderContractAnalysis(data.contractAnalysis);
+  results.hidden = false;
+}
+
+function validateSubmission(submittedUrl, contractAddress) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(submittedUrl);
+  } catch {
+    return { message: "Enter a valid website URL.", field: urlInput };
+  }
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    return { message: "Only HTTP and HTTPS website URLs are supported.", field: urlInput };
+  }
+  if (contractAddress && !ADDRESS_PATTERN.test(contractAddress)) {
+    return {
+      message: "Enter a contract address beginning with 0x and containing exactly 40 hexadecimal characters.",
+      field: contractInput
+    };
+  }
+  return null;
+}
+
+async function investigate(event) {
+  event.preventDefault();
+  if (requestInProgress) {
+    return;
+  }
+
+  const submittedUrl = urlInput.value.trim();
+  const contractAddress = contractInput.value.trim();
+  const validationError = validateSubmission(submittedUrl, contractAddress);
+  if (validationError) {
+    setFormMessage(validationError.message, "error");
+    validationError.field.focus();
+    return;
+  }
+
+  requestInProgress = true;
+  const sequence = ++requestSequence;
+  results.hidden = true;
+  setFormMessage("Running independent website and provider checks…", "loading");
+  submitButton.disabled = true;
+  submitButton.setAttribute("aria-busy", "true");
+
+  const requestBody = { url: submittedUrl };
+  if (contractAddress) {
+    requestBody.contractAddress = contractAddress;
+  }
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "error"
+    });
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("The investigation service returned an unreadable response.");
+    }
+    if (!response.ok) {
+      const message = typeof data.error === "string" ? data.error : "The investigation could not be completed.";
+      throw new Error(message);
+    }
+    if (sequence !== requestSequence) {
+      return;
+    }
+    renderResults(data, submittedUrl, contractAddress);
+    setFormMessage("Investigation complete. Review each result and its limitations.", "success");
+  } catch (error) {
+    if (sequence === requestSequence) {
+      results.hidden = true;
+      setFormMessage(
+        error instanceof TypeError
+          ? "Could not connect to the local ChainShield backend. Make sure the server is running on port 3000."
+          : error.message || "The investigation could not be completed.",
+        "error"
+      );
+    }
+  } finally {
+    if (sequence === requestSequence) {
+      requestInProgress = false;
+      submitButton.disabled = false;
+      submitButton.removeAttribute("aria-busy");
+    }
+  }
+}
+
+backButton.addEventListener("click", () => showStep(currentStep - 1));
+nextButton.addEventListener("click", () => showStep(currentStep + 1));
+openWorkspaceButton.addEventListener("click", openWorkspace);
+skipButton.addEventListener("click", openWorkspace);
+investigationForm.addEventListener("submit", investigate);
+newInvestigationButton.addEventListener("click", () => {
+  results.hidden = true;
+  setFormMessage("Enter another URL to start a new investigation.");
+  urlInput.focus();
 });
-</script>
+
+document.querySelectorAll(".brand[href='#']").forEach((brandLink) => {
+  brandLink.addEventListener("click", (event) => event.preventDefault());
+});
+
+if (localStorage.getItem(ONBOARDING_KEY) === "true") {
+  onboardingView.hidden = true;
+  workspaceView.hidden = false;
+} else {
+  showStep(currentStep);
+}
