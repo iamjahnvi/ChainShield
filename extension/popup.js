@@ -20,6 +20,7 @@ const resultsWeb3 = document.getElementById("results-web3");
 const newInvestigationButton = document.getElementById("new-investigation");
 const investigationContext = document.getElementById("investigation-context");
 const siteStatusBadge = document.getElementById("site-status-badge");
+const contractAddressInput = document.getElementById("contract-address");
 
 let currentStep = 1;
 let requestInProgress = false;
@@ -485,6 +486,7 @@ function renderResults(data, submittedUrl) {
   renderThreatAssessment(data.threatAssessment);
   renderUrlSignals(data.urlSignals);
   renderSiteStatus(data.threatAssessment, data.urlSignals, data.alternativeSites);
+  renderEthereumAssessment(data.ethereumAssessment);
   results.hidden = false;
 }
 
@@ -507,6 +509,22 @@ async function investigate(event) {
     return;
   }
 
+  // Auto-detect active tab URL
+  let autoUrl = "";
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.url) {
+      autoUrl = tab.url;
+    }
+  } catch (err) {
+    // If we can't query tabs, continue with manual URL
+  }
+
+  // If we found an active tab with a supported URL, use it
+  if (autoUrl && /^https?:\/\//i.test(autoUrl)) {
+    urlInput.value = autoUrl;
+  }
+
   const submittedUrl = urlInput.value.trim();
   const validationError = validateSubmission(submittedUrl);
   if (validationError) {
@@ -522,7 +540,11 @@ async function investigate(event) {
   submitButton.disabled = true;
   submitButton.setAttribute("aria-busy", "true");
 
+  const contractAddress = contractAddressInput.value.trim();
   const requestBody = { url: submittedUrl };
+  if (contractAddress !== "") {
+    requestBody.contractAddress = contractAddress;
+  }
 
   try {
     const response = await fetch(API_URL, {
