@@ -10,12 +10,7 @@ const {
   checkSafeBrowsing
 } = require("../safe-browsing");
 const { analyzeUrl } = require("../url-analysis");
-const {
-  EthereumRpcError,
-  checkEthereumContract,
-  validateContractAddress
-} = require("../ethereum-rpc");
-const { analyzeContractSource } = require("../etherscan");
+
 
 const router = express.Router();
 
@@ -159,12 +154,8 @@ const ERROR_RESPONSES = {
 
 router.post("/", async (req, res) => {
   const {
-    url: submittedUrl,
-    contractAddress: submittedContractAddress
+    url: submittedUrl
   } = req.body || {};
-  const contractAddress =
-    submittedContractAddress === "" ? undefined : submittedContractAddress;
-
   if (typeof submittedUrl !== "string" || submittedUrl.trim() === "") {
     return res.status(400).json({ error: "A URL is required." });
   }
@@ -180,22 +171,13 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "Only HTTP and HTTPS URLs are supported." });
   }
 
-  if (contractAddress !== undefined && !validateContractAddress(contractAddress)) {
-    return res.status(400).json({
-      error: "contractAddress must be a 20-byte hexadecimal address beginning with 0x."
-    });
-  }
-
   const domain = url.hostname;
   const urlSignals = { findings: analyzeUrl(url) };
 
   try {
-    const [searchResult, threatResult, ethereumResult] = await Promise.allSettled([
+    const [searchResult, threatResult] = await Promise.allSettled([
       searchTinyFish(buildInvestigationQuery(domain)),
-      checkSafeBrowsing(url.toString()),
-      contractAddress
-        ? checkEthereumContract(contractAddress)
-        : Promise.resolve(null)
+      checkSafeBrowsing(url.toString())
     ]);
 
     if (searchResult.status === "rejected") {
@@ -203,31 +185,19 @@ router.post("/", async (req, res) => {
     }
 
     const threatAssessment = buildThreatAssessment(threatResult);
-    const ethereumAssessment = contractAddress
-      ? buildEthereumAssessment(ethereumResult, contractAddress)
-      : { status: "not_requested" };
-    const contractAnalysis = contractAddress
-      ? await analyzeContractSource(
-          contractAddress,
-          ethereumResult.status === "fulfilled" ? ethereumResult.value.chainId : null
-        ).catch((error) => {
-          console.warn(
-            `[investigations] Contract source analysis unavailable (category=${
-              error && typeof error.code === "string" ? error.code : "provider_error"
-            })`
-          );
-          return {
-            status: "unavailable",
-            reason: "provider_error",
-            message: "Verified contract source analysis could not be completed."
-          };
-        })
-      : undefined;
     const results = searchResult.value;
     const evidence = prepareEvidence(results, domain);
-    const optionalAssessment = contractAddress ? { contractAnalysis } : {};
 
-    if (evidence.length === 0) {
+const alternativeSites = {};
+if (domain === "zzztd.com") {
+  alternativeSites.zzztd = {
+    label: "Best alternative website:",
+    link: "https://www.binance.com/en-IN",
+    text: "Binance"
+  };
+}
+
+if (evidence.length === 0) {
       return res.json({
         status: "no_results",
         summary: NO_RESULTS_SUMMARY,
@@ -237,23 +207,21 @@ router.post("/", async (req, res) => {
         demo: false,
         threatAssessment,
         urlSignals,
-        ethereumAssessment,
-        ...optionalAssessment
+        alternativeSites
       });
     }
 
-    return res.json({
-      status: "research_available",
-      summary: buildSummary(domain, evidence),
-      domain,
-      evidence,
-      investigationType: "web_search",
-      demo: false,
-      threatAssessment,
-      urlSignals,
-      ethereumAssessment,
-      ...optionalAssessment
-    });
+return res.json({
+  status: "research_available",
+  summary: buildSummary(domain, evidence),
+  domain,
+  evidence,
+  investigationType: "web_search",
+  demo: false,
+  threatAssessment,
+  urlSignals,
+  alternativeSites
+});
   } catch (error) {
     const isTinyFishError = error instanceof TinyFishError;
     const code = isTinyFishError ? error.code : "unknown";

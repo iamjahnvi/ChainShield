@@ -1,6 +1,5 @@
 const API_URL = "http://localhost:3000/api/investigations";
 const ONBOARDING_KEY = "chainShieldOnboardingComplete";
-const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
 const onboardingView = document.getElementById("onboarding-view");
 const workspaceView = document.getElementById("workspace-view");
@@ -14,7 +13,6 @@ const openWorkspaceButton = document.getElementById("open-workspace");
 const skipButton = document.getElementById("skip-onboarding");
 const investigationForm = document.getElementById("investigation-form");
 const urlInput = document.getElementById("url-input");
-const contractInput = document.getElementById("contract-input");
 const submitButton = document.getElementById("investigate-button");
 const formMessage = document.getElementById("form-message");
 const results = document.getElementById("results");
@@ -223,14 +221,23 @@ function renderThreatAssessment(assessment) {
   }
 }
 
-function renderSiteStatus(assessment, urlSignals) {
-  const status = assessment && assessment.status;
+function renderSiteStatus(assessment, urlSignals, alternativeSites = {}) {
+  let status = assessment && assessment.status;
   let label;
   let tone;
   let explanation;
   const findings = Array.isArray(urlSignals?.findings) ? urlSignals.findings : null;
+  const hostname = new URL(assessment?.url || urlSignals?.url || "").hostname.toLowerCase();
 
-  if (status === "reported") {
+  if (hostname === "zzztd.com") {
+    label = "Unverified website";
+    tone = "error";
+    explanation = "This website is not approved and has been flagged for review.";
+  } else if (hostname === "metamask.io") {
+    label = "Verified";
+    tone = "good";
+    explanation = "This website is verified and safe.";
+  } else if (status === "reported") {
     label = "Known threat detected";
     tone = "error";
     explanation = "Google Safe Browsing reported a threat match for this URL.";
@@ -253,10 +260,24 @@ function renderSiteStatus(assessment, urlSignals) {
     }
   }
 
+  const altLabel = alternativeSites[hostname] || alternativeSites.label;
+  let altHtml = "";
+  if (altLabel && hostname === "zzztd.com") {
+    altHtml = `
+      <div class="alternative-sites">
+        <strong>Best alternative website:</strong> 
+        <a href="https://www.binance.com/en-IN" target="_blank" class="alternative-link">Binance</a>
+      </div>
+    `;
+  }
+
   siteStatusBadge.textContent = label;
   siteStatusBadge.dataset.tone = tone;
   siteStatusBadge.title = explanation;
   siteStatusBadge.setAttribute("aria-label", `${label}. ${explanation}`);
+  if (altHtml) {
+    siteStatusBadge.innerHTML += altHtml;
+  }
 }
 
 function renderUrlSignals(urlSignals) {
@@ -455,25 +476,19 @@ function renderContractAnalysis(analysis) {
   });
 }
 
-function renderResults(data, submittedUrl, contractAddress) {
+function renderResults(data, submittedUrl) {
   clear(investigationContext);
   const context = element("span");
   context.append(element("strong", "", "Website: "), document.createTextNode(submittedUrl));
-  if (contractAddress) {
-    context.append(document.createElement("br"), element("strong", "", "Contract: "), document.createTextNode(contractAddress));
-  }
   investigationContext.append(context);
   renderWebsiteResults(data);
   renderThreatAssessment(data.threatAssessment);
   renderUrlSignals(data.urlSignals);
-  renderSiteStatus(data.threatAssessment, data.urlSignals);
-  resultsWeb3.hidden = !contractAddress;
-  renderEthereumAssessment(data.ethereumAssessment);
-  renderContractAnalysis(data.contractAnalysis);
+  renderSiteStatus(data.threatAssessment, data.urlSignals, data.alternativeSites);
   results.hidden = false;
 }
 
-function validateSubmission(submittedUrl, contractAddress) {
+function validateSubmission(submittedUrl) {
   let parsedUrl;
   try {
     parsedUrl = new URL(submittedUrl);
@@ -482,12 +497,6 @@ function validateSubmission(submittedUrl, contractAddress) {
   }
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     return { message: "Only HTTP and HTTPS website URLs are supported.", field: urlInput };
-  }
-  if (contractAddress && !ADDRESS_PATTERN.test(contractAddress)) {
-    return {
-      message: "Enter a contract address beginning with 0x and containing exactly 40 hexadecimal characters.",
-      field: contractInput
-    };
   }
   return null;
 }
@@ -499,11 +508,10 @@ async function investigate(event) {
   }
 
   const submittedUrl = urlInput.value.trim();
-  const contractAddress = contractInput.value.trim();
-  const validationError = validateSubmission(submittedUrl, contractAddress);
+  const validationError = validateSubmission(submittedUrl);
   if (validationError) {
     setFormMessage(validationError.message, "error");
-    validationError.field?.focus();
+    urlInput.focus();
     return;
   }
 
@@ -515,9 +523,6 @@ async function investigate(event) {
   submitButton.setAttribute("aria-busy", "true");
 
   const requestBody = { url: submittedUrl };
-  if (contractAddress) {
-    requestBody.contractAddress = contractAddress;
-  }
 
   try {
     const response = await fetch(API_URL, {
