@@ -158,7 +158,12 @@ const ERROR_RESPONSES = {
 };
 
 router.post("/", async (req, res) => {
-  const { url: submittedUrl, contractAddress } = req.body || {};
+  const {
+    url: submittedUrl,
+    contractAddress: submittedContractAddress
+  } = req.body || {};
+  const contractAddress =
+    submittedContractAddress === "" ? undefined : submittedContractAddress;
 
   if (typeof submittedUrl !== "string" || submittedUrl.trim() === "") {
     return res.status(400).json({ error: "A URL is required." });

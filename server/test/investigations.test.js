@@ -308,6 +308,32 @@ test("optional Ethereum assessment reports network, block, and bytecode separate
   assert.ok(!capturedLogs.join("\n").includes("route-test-credential"));
 });
 
+test("blank contract address is treated as an omitted optional field", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(async () => jsonResponse({}));
+  let ethereumRpcCalls = 0;
+  let etherscanCalls = 0;
+  setEthereumRpcFetch(async () => {
+    ethereumRpcCalls += 1;
+    throw new Error("Ethereum RPC should not be called for a blank address.");
+  });
+  setEtherscanFetch(async () => {
+    etherscanCalls += 1;
+    throw new Error("Etherscan should not be called for a blank address.");
+  });
+
+  const { response, body } = await postInvestigation({
+    url: "https://example.com",
+    contractAddress: ""
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.ethereumAssessment, { status: "not_requested" });
+  assert.equal("contractAnalysis" in body, false);
+  assert.equal(ethereumRpcCalls, 0);
+  assert.equal(etherscanCalls, 0);
+});
+
 test("verified-source analysis is additive and independent from other investigation results", async (t) => {
   await t.test("analyzes verified Mainnet source", async () => {
     setSearchFetch(async () => jsonResponse({ results: [] }));
