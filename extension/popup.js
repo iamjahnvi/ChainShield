@@ -549,7 +549,7 @@ async function investigate(event) {
     if (sequence !== requestSequence) {
       return;
     }
-    renderResults(data, submittedUrl, contractAddress);
+    renderResults(data, submittedUrl);
     setFormMessage("Investigation complete. Review each result and its limitations.", "success");
   } catch (error) {
     if (sequence === requestSequence) {
