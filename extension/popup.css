@@ -900,10 +900,6 @@ input:focus-visible {
   min-width: 0;
 }
 
-.form-secondary > label {
-  justify-content: flex-start;
-}
-
 .investigation-form label {
   margin-bottom: 9px;
   display: flex;
