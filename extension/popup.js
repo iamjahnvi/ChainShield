@@ -20,6 +20,7 @@ const formMessage = document.getElementById("form-message");
 const results = document.getElementById("results");
 const newInvestigationButton = document.getElementById("new-investigation");
 const investigationContext = document.getElementById("investigation-context");
+const siteStatusBadge = document.getElementById("site-status-badge");
 
 let currentStep = 1;
 let requestInProgress = false;
@@ -173,41 +174,30 @@ function renderWebsiteResults(data) {
   });
 }
 
-function renderSafeBrowsing(assessment) {
-  const panel = document.getElementById("results-sb");
-  const content = document.getElementById("results-sb-evidence");
-  panel.hidden = false;
-  clear(content);
+function renderSiteStatus(assessment) {
   const status = assessment && assessment.status;
+  let label;
+  let tone;
+  let explanation;
 
-  if (!assessment || status === "unavailable") {
-    setResultStatus("results-sb-status", "Threat reputation check is unavailable.", "warning");
+  if (status === "no_match") {
+    label = "Verified";
+    tone = "good";
+    explanation = "Google Safe Browsing returned no match for this URL. This does not verify the site's identity or guarantee safety.";
   } else if (status === "reported") {
-    setResultStatus("results-sb-status", "Google Safe Browsing reported a match for the submitted URL.", "warning");
-  } else if (status === "no_match") {
-    setResultStatus("results-sb-status", "No match was returned for the submitted URL. This is not a guarantee of safety.");
+    label = "Threat reported";
+    tone = "error";
+    explanation = "Google Safe Browsing reported a threat match for this URL.";
   } else {
-    setResultStatus("results-sb-status", `Threat reputation status: ${status || "unknown"}.`);
+    label = "Check unavailable";
+    tone = "warning";
+    explanation = "Google Safe Browsing could not provide a result. The website has not been verified.";
   }
 
-  const providers = Array.isArray(assessment?.providers) ? assessment.providers : [];
-  providers.forEach((provider) => {
-    const matches = Array.isArray(provider.matches) ? provider.matches : [];
-    matches.forEach((match) => {
-      const parts = [
-        match.threatType && `Threat type: ${match.threatType}`,
-        match.platformType && `Platform: ${match.platformType}`,
-        match.threatEntryType && `Entry type: ${match.threatEntryType}`
-      ].filter(Boolean);
-      content.append(element("p", "evidence-snippet", parts.join(" · ") || "A threat match was reported."));
-    });
-    if (provider.reason) {
-      content.append(element("p", "evidence-meta", `Unavailable reason: ${provider.reason}`));
-    }
-  });
-  if (status === "unavailable" && content.childElementCount === 0) {
-    content.append(element("p", "result-content", "No additional provider details were available."));
-  }
+  siteStatusBadge.textContent = label;
+  siteStatusBadge.dataset.tone = tone;
+  siteStatusBadge.title = explanation;
+  siteStatusBadge.setAttribute("aria-label", `${label}. ${explanation}`);
 }
 
 function renderUrlSignals(urlSignals) {
@@ -404,7 +394,7 @@ function renderResults(data, submittedUrl, contractAddress) {
   }
   investigationContext.append(context);
   renderWebsiteResults(data);
-  renderSafeBrowsing(data.threatAssessment);
+  renderSiteStatus(data.threatAssessment);
   renderUrlSignals(data.urlSignals);
   renderEthereumAssessment(data.ethereumAssessment);
   renderContractAnalysis(data.contractAnalysis);

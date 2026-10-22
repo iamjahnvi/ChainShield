@@ -224,7 +224,10 @@
             <div class="results-heading">
               <div>
                 <p class="eyebrow"><span class="eyebrow-mark"></span> INVESTIGATION REPORT</p>
-                <h2 id="results-title">Results</h2>
+                <div class="results-title-row">
+                  <h2 id="results-title">Results</h2>
+                  <span id="site-status-badge" class="status-badge report-status-badge" role="status" aria-live="polite"></span>
+                </div>
               </div>
               <button id="new-investigation" class="button button-quiet" type="button">New investigation</button>
             </div>
@@ -235,23 +238,18 @@
                 <p class="result-status" id="results-website-status"></p>
                 <div id="results-website-evidence" class="result-content"></div>
               </section>
-              <section id="results-sb" class="result-panel" aria-labelledby="sb-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon panel-icon-amber">02</span><div><h3 id="sb-heading">Threat reputation</h3><p>Google Safe Browsing</p></div></div>
-                <p class="result-status" id="results-sb-status"></p>
-                <div id="results-sb-evidence" class="result-content"></div>
-              </section>
               <section id="results-url" class="result-panel" aria-labelledby="url-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon panel-icon-blue">03</span><div><h3 id="url-heading">URL structure</h3><p>Local heuristic signals</p></div></div>
+                <div class="panel-heading"><span class="panel-icon panel-icon-blue">02</span><div><h3 id="url-heading">URL structure</h3><p>Local heuristic signals</p></div></div>
                 <p class="result-status" id="results-url-status"></p>
                 <div id="results-url-evidence" class="result-content"></div>
               </section>
               <section id="results-ethereum" class="result-panel" aria-labelledby="ethereum-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon panel-icon-blue">04</span><div><h3 id="ethereum-heading">Ethereum RPC</h3><p>Network and bytecode observation</p></div></div>
+                <div class="panel-heading"><span class="panel-icon panel-icon-blue">03</span><div><h3 id="ethereum-heading">Ethereum RPC</h3><p>Network and bytecode observation</p></div></div>
                 <p class="result-status" id="results-ethereum-status"></p>
                 <div id="results-ethereum-evidence" class="result-content"></div>
               </section>
               <section id="results-contract" class="result-panel result-panel-wide" aria-labelledby="contract-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon panel-icon-amber">05</span><div><h3 id="contract-heading">Smart contract source</h3><p>Etherscan verified source and proxy metadata</p></div></div>
+                <div class="panel-heading"><span class="panel-icon panel-icon-amber">04</span><div><h3 id="contract-heading">Smart contract source</h3><p>Etherscan verified source and proxy metadata</p></div></div>
                 <p class="result-status" id="results-contract-status"></p>
                 <div id="results-contract-evidence" class="result-content layer-list"></div>
               </section>

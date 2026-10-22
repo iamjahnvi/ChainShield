@@ -1030,6 +1030,18 @@ input:focus-visible {
   letter-spacing: -.035em;
 }
 
+.results-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.report-status-badge {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
 .investigation-context {
   margin-bottom: 17px;
   padding: 12px 15px;
