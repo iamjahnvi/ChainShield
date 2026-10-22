@@ -1,4 +1,8 @@
-# 🛡️ ChainShield
+# ChainShield
+
+<p align="center">
+  <img src="extension/shield.svg" alt="ChainShield shield and checkmark" width="72" />
+</p>
 
 <p align="center">
   <strong>Investigate the website. Inspect the evidence. Understand the contract.</strong>
@@ -9,11 +13,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white" alt="Chrome Manifest V3" />
-  <img src="https://img.shields.io/badge/Backend-Node.js%20%7C%20Express-339933?logo=nodedotjs&logoColor=white" alt="Node.js and Express" />
-  <img src="https://img.shields.io/badge/Web%20Intelligence-TinyFish-111827" alt="TinyFish integration" />
-  <img src="https://img.shields.io/badge/Web3-Ethereum-627EEA?logo=ethereum&logoColor=white" alt="Ethereum" />
-  <img src="https://img.shields.io/badge/Analysis-Read--Only-0F766E" alt="Read-only analysis" />
+  <img src="https://img.shields.io/badge/Chrome-Manifest%20V3-B91C1C?logo=googlechrome&logoColor=white" alt="Chrome Manifest V3" />
+  <img src="https://img.shields.io/badge/Backend-Node.js%20%7C%20Express-B91C1C?logo=nodedotjs&logoColor=white" alt="Node.js and Express" />
+  <img src="https://img.shields.io/badge/Web%20Intelligence-TinyFish-7F1D1D" alt="TinyFish integration" />
+  <img src="https://img.shields.io/badge/Web3-Ethereum-B91C1C?logo=ethereum&logoColor=white" alt="Ethereum" />
+  <img src="https://img.shields.io/badge/Analysis-Read--Only-7F1D1D" alt="Read-only analysis" />
 </p>
 
 <p align="center">
@@ -45,6 +49,8 @@ It combines:
 Each layer has a separate responsibility. A search result is not a threat verdict, bytecode presence is not a security guarantee, and verified source code is not proof that a contract is safe.
 
 ## ✨ Core capabilities
+
+The extension, onboarding flow, investigation workspace, report, favicon, and toolbar icons share the red shield-and-checkmark identity. Reports keep provider failures, no-match results, and local heuristic indicators distinct; a no-match is not shown as domain verification.
 
 | Capability | What ChainShield does | What it does not claim |
 |---|---|---|
@@ -556,7 +562,6 @@ Check the repository for an existing license before reusing or redistributing th
 <p align="center">
   Built to bring web intelligence and read-only Web3 inspection into one evidence-driven workflow.
 </p>
-
 
 
 

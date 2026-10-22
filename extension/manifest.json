@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ChainShield",
   "version": "0.1.0",
-  "description": "A demo interface for evidence-based Web3 website risk investigation.",
+  "description": "Review website evidence and optional read-only Web3 context.",
   "icons": {
     "16": "icons/shield-16.png",
     "32": "icons/shield-32.png",

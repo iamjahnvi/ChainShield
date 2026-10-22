@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#081426">
+    <meta name="theme-color" content="#FAFAFA">
     <title>ChainShield — Website and Web3 investigation</title>
     <link rel="icon" href="shield.svg" type="image/svg+xml">
     <link rel="stylesheet" href="popup.css">
@@ -44,14 +44,14 @@
                 <desc id="flow-desc">A website address connects to separate web intelligence, threat reputation, and URL structure checks.</desc>
                 <defs>
                   <linearGradient id="flowLine" x1="0" x2="1">
-                    <stop offset="0" stop-color="#4daaff" stop-opacity=".78"/>
-                    <stop offset="1" stop-color="#4daaff" stop-opacity=".24"/>
+                    <stop offset="0" stop-color="#E53935" stop-opacity=".4"/>
+                    <stop offset="1" stop-color="#E53935" stop-opacity=".1"/>
                   </linearGradient>
                 </defs>
                 <rect class="art-input" x="189" y="35" width="342" height="72" rx="16"/>
                 <circle class="art-dot" cx="220" cy="71" r="7"/>
                 <text class="art-label" x="243" y="67">WEBSITE TO REVIEW</text>
-                <text class="art-main" x="243" y="89">https://example.site</text>
+                <text class="art-main" x="243" y="89">Active website URL</text>
                 <path class="art-connector" d="M360 107v51m-222 0h444m-444 0v55m222-55v55m222-55v55"/>
                 <rect class="art-card" x="28" y="213" width="210" height="132" rx="17"/>
                 <rect class="art-icon-box" x="49" y="235" width="38" height="38" rx="11"/>
@@ -59,13 +59,13 @@
                 <text class="art-card-title" x="49" y="300">Web intelligence</text>
                 <text class="art-card-note" x="49" y="323">Public sources to review</text>
                 <rect class="art-card" x="255" y="213" width="210" height="132" rx="17"/>
-                <rect class="art-icon-box art-icon-amber" x="276" y="235" width="38" height="38" rx="11"/>
-                <text class="art-icon art-icon-text-amber" x="295" y="261" text-anchor="middle">02</text>
+                <rect class="art-icon-box" x="276" y="235" width="38" height="38" rx="11"/>
+                <text class="art-icon" x="295" y="261" text-anchor="middle">02</text>
                 <text class="art-card-title" x="276" y="300">Threat reputation</text>
                 <text class="art-card-note" x="276" y="323">Independent URL lookup</text>
                 <rect class="art-card" x="482" y="213" width="210" height="132" rx="17"/>
-                <rect class="art-icon-box art-icon-blue" x="503" y="235" width="38" height="38" rx="11"/>
-                <text class="art-icon art-icon-text-blue" x="522" y="261" text-anchor="middle">03</text>
+                <rect class="art-icon-box" x="503" y="235" width="38" height="38" rx="11"/>
+                <text class="art-icon" x="522" y="261" text-anchor="middle">03</text>
                 <text class="art-card-title" x="503" y="300">URL structure</text>
                 <text class="art-card-note" x="503" y="323">Local structural signals</text>
                 <text class="art-footnote" x="360" y="391" text-anchor="middle">Independent signals — not a guarantee of safety</text>
@@ -89,17 +89,17 @@
                   <p>TinyFish returns public search results related to the hostname.</p>
                 </article>
                 <article class="signal-tile">
-                  <span class="signal-number signal-amber">02</span>
+                  <span class="signal-number signal-secondary">02</span>
                   <h3>Threat reputation</h3>
                   <p>Google Safe Browsing checks the submitted URL for reported threats.</p>
                 </article>
                 <article class="signal-tile">
-                  <span class="signal-number signal-blue">03</span>
+                  <span class="signal-number signal-supporting">03</span>
                   <h3>URL structure</h3>
                   <p>Local heuristics note selected URL and hostname patterns.</p>
                 </article>
                 <article class="signal-tile">
-                  <span class="signal-number signal-violet">04</span>
+                  <span class="signal-number signal-alternate">04</span>
                   <h3>Independent evidence</h3>
                   <p>Results stay separate so uncertainty is visible, not hidden.</p>
                 </article>
@@ -131,9 +131,9 @@
                   </div>
                   <div class="chain-connector"></div>
                   <div class="chain-layer">
-                    <span class="layer-index layer-index-amber">B</span>
+                    <span class="layer-index">B</span>
                     <div><strong>Implementation source</strong><small>Capability indicator: review</small></div>
-                    <span class="layer-type layer-type-amber">SOURCE</span>
+                    <span class="layer-type">SOURCE</span>
                   </div>
                 </div>
                 <div class="preview-capabilities">
@@ -166,7 +166,7 @@
                 <div class="preview-input">Detected from your active tab</div>
                 <label>Optional Ethereum contract address</label>
                 <div class="preview-input preview-input-muted">0x… (40 hexadecimal characters)</div>
-                <div class="preview-button">Investigate this website</div>
+                <button class="preview-button" type="button" disabled>Investigate this website</button>
                 <p class="preview-disclaimer">Preview only — no sample results are shown.</p>
               </div>
             </div>
@@ -201,7 +201,14 @@
           </section>
 
           <form id="investigation-form" class="investigation-form" novalidate>
-            <input id="url-input" name="url" type="hidden">
+            <div class="form-main">
+              <label for="url-input">Website URL <span>HTTP OR HTTPS</span></label>
+              <div class="input-wrap input-wrap-url">
+                <span class="input-prefix" aria-hidden="true">↗</span>
+                <input id="url-input" name="url" type="url" inputmode="url" autocomplete="url" spellcheck="false" placeholder="Enter a website URL to investigate" required>
+              </div>
+              <p class="field-hint" id="url-hint">ChainShield uses the active tab URL when available. You can also enter a URL manually.</p>
+            </div>
             <div class="form-secondary">
               <label for="contract-input">Ethereum contract address <span>OPTIONAL</span></label>
               <div class="contract-action-row">
@@ -209,14 +216,14 @@
                   <span class="input-prefix input-prefix-eth" aria-hidden="true">◇</span>
                   <input id="contract-input" name="contractAddress" type="text" inputmode="text" maxlength="42" autocomplete="off" spellcheck="false" placeholder="0x… (40 hexadecimal characters)">
                 </div>
-                <button class="button button-primary submit-button" id="investigate-button" type="submit">
-                  <span>Investigate this website</span><span aria-hidden="true">→</span>
-                </button>
               </div>
               <p class="field-hint">This address is analyzed separately; its relationship to the website is not verified.</p>
             </div>
             <div class="form-submit-row">
               <p class="form-readonly-note"><span class="readonly-dot"></span> Read-only checks · No wallet connection</p>
+              <button class="button button-primary submit-button" id="investigate-button" type="submit">
+                <span>Investigate this website</span><span aria-hidden="true">→</span>
+              </button>
             </div>
             <p id="form-message" class="form-message" role="status" aria-live="polite">Results are investigative evidence, not a safety guarantee.</p>
           </form>
@@ -235,26 +242,39 @@
             <div class="investigation-context" id="investigation-context"></div>
             <div class="results-grid">
               <section id="results-website" class="result-panel result-panel-wide" aria-labelledby="website-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon panel-icon-teal">01</span><div><h3 id="website-heading">Website intelligence</h3><p>Public search evidence</p></div></div>
+                <div class="panel-heading"><span class="panel-icon">01</span><div><h3 id="website-heading">Website intelligence</h3><p>Public search evidence</p></div></div>
                 <p class="result-status" id="results-website-status"></p>
+                <p class="evidence-limit">Search relevance does not verify a website's ownership or legitimacy, and does not prove maliciousness.</p>
                 <div id="results-website-evidence" class="result-content"></div>
               </section>
+              <section id="results-threat" class="result-panel" aria-labelledby="threat-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon">02</span><div><h3 id="threat-heading">Threat reputation</h3><p>Google Safe Browsing</p></div></div>
+                <p class="result-status" id="results-threat-status"></p>
+                <div id="results-threat-evidence" class="result-content"></div>
+              </section>
               <section id="results-url" class="result-panel" aria-labelledby="url-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon panel-icon-blue">02</span><div><h3 id="url-heading">URL structure</h3><p>Local heuristic signals</p></div></div>
+                <div class="panel-heading"><span class="panel-icon">03</span><div><h3 id="url-heading">URL structure</h3><p>Local heuristic signals</p></div></div>
                 <p class="result-status" id="results-url-status"></p>
                 <div id="results-url-evidence" class="result-content"></div>
               </section>
-              <section id="results-ethereum" class="result-panel" aria-labelledby="ethereum-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon panel-icon-blue">03</span><div><h3 id="ethereum-heading">Ethereum RPC</h3><p>Network and bytecode observation</p></div></div>
-                <p class="result-status" id="results-ethereum-status"></p>
-                <div id="results-ethereum-evidence" class="result-content"></div>
-              </section>
-              <section id="results-contract" class="result-panel result-panel-wide" aria-labelledby="contract-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon panel-icon-amber">04</span><div><h3 id="contract-heading">Smart contract source</h3><p>Etherscan verified source and proxy metadata</p></div></div>
-                <p class="result-status" id="results-contract-status"></p>
-                <div id="results-contract-evidence" class="result-content layer-list"></div>
+              <section id="results-web3" class="result-panel result-panel-wide" aria-labelledby="web3-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon">04</span><div><h3 id="web3-heading">Optional Web3 analysis</h3><p>Read-only Ethereum observations and Etherscan source details</p></div></div>
+                <p class="web3-disclaimer">Contract capabilities are not confirmed vulnerabilities. The submitted address is analyzed independently; its relationship to the website is not verified.</p>
+                <div class="web3-results-grid">
+                  <section id="results-ethereum" class="web3-subpanel" aria-labelledby="ethereum-heading">
+                    <h4 id="ethereum-heading">Ethereum network</h4>
+                    <p class="result-status" id="results-ethereum-status"></p>
+                    <div id="results-ethereum-evidence" class="result-content"></div>
+                  </section>
+                  <section id="results-contract" class="web3-subpanel" aria-labelledby="contract-heading">
+                    <h4 id="contract-heading">Verified source and proxy metadata</h4>
+                    <p class="result-status" id="results-contract-status"></p>
+                    <div id="results-contract-evidence" class="result-content layer-list"></div>
+                  </section>
+                </div>
               </section>
             </div>
+            <p class="report-disclaimer">ChainShield presents available evidence to support your investigation. It does not guarantee that a website or smart contract is safe.</p>
           </section>
         </main>
 

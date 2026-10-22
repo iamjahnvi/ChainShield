@@ -18,6 +18,7 @@ const contractInput = document.getElementById("contract-input");
 const submitButton = document.getElementById("investigate-button");
 const formMessage = document.getElementById("form-message");
 const results = document.getElementById("results");
+const resultsWeb3 = document.getElementById("results-web3");
 const newInvestigationButton = document.getElementById("new-investigation");
 const investigationContext = document.getElementById("investigation-context");
 const siteStatusBadge = document.getElementById("site-status-badge");
@@ -174,24 +175,82 @@ function renderWebsiteResults(data) {
   });
 }
 
-function renderSiteStatus(assessment) {
+function renderThreatAssessment(assessment) {
+  const panel = document.getElementById("results-threat");
+  const evidence = document.getElementById("results-threat-evidence");
+  panel.hidden = false;
+  clear(evidence);
+
+  const status = assessment && assessment.status;
+  const provider = Array.isArray(assessment?.providers)
+    ? assessment.providers.find((entry) => entry && entry.id === "google_safe_browsing")
+    : null;
+  let message;
+
+  if (status === "reported") {
+    message = "Google Safe Browsing reported a threat match for this URL.";
+  } else if (status === "no_match") {
+    message = "Google Safe Browsing completed with no reported match. This does not verify the site's identity or guarantee safety.";
+  } else if (status === "unavailable") {
+    message = "The Google Safe Browsing check was unavailable. No conclusion can be drawn from this check.";
+  } else {
+    message = "The threat-reputation result is inconclusive.";
+  }
+  setResultStatus("results-threat-status", message, status === "reported" ? "warning" : "");
+
+  const matches = Array.isArray(provider?.matches) ? provider.matches : [];
+  if (matches.length > 0) {
+    matches.forEach((match) => {
+      const item = element("article", "signal-item");
+      item.append(element("div", "signal-title", match.threatType || "Reported threat"));
+      const matchUrl = safeHttpUrl(match.matchedUrl);
+      if (matchUrl) {
+        const link = element("a", "evidence-link", matchUrl);
+        link.href = matchUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        item.append(link);
+      }
+      evidence.append(item);
+    });
+  } else if (status === "reported") {
+    evidence.append(element("p", "result-content", "A threat match was reported, but match details were not provided."));
+  } else if (status === "unavailable") {
+    const reason = typeof provider?.reason === "string" ? provider.reason : "";
+    evidence.append(element("p", "result-content", reason
+      ? `Provider check unavailable (${reason}).`
+      : "Provider match details are unavailable."));
+  }
+}
+
+function renderSiteStatus(assessment, urlSignals) {
   const status = assessment && assessment.status;
   let label;
   let tone;
   let explanation;
+  const findings = Array.isArray(urlSignals?.findings) ? urlSignals.findings : null;
 
-  if (status === "no_match") {
-    label = "Verified";
-    tone = "good";
-    explanation = "Google Safe Browsing returned no match for this URL. This does not verify the site's identity or guarantee safety.";
-  } else if (status === "reported") {
-    label = "Threat reported";
+  if (status === "reported") {
+    label = "Known threat detected";
     tone = "error";
     explanation = "Google Safe Browsing reported a threat match for this URL.";
+  } else if (findings && findings.length > 0) {
+    label = "Suspicious indicators found";
+    tone = "warning";
+    explanation = "Configured URL-structure checks found patterns to review. These patterns do not prove malicious behavior.";
+  } else if (status === "no_match") {
+    label = "No known threats reported";
+    tone = "warning";
+    explanation = "Google Safe Browsing returned no reported match. This does not verify the site's identity or guarantee safety.";
   } else {
     label = "Check unavailable";
     tone = "warning";
-    explanation = "Google Safe Browsing could not provide a result. The website has not been verified.";
+    if (status !== "unavailable") {
+      label = "Inconclusive";
+      explanation = "The available checks do not support a reliable overall conclusion.";
+    } else {
+      explanation = "Google Safe Browsing could not provide a result. The website has not been verified.";
+    }
   }
 
   siteStatusBadge.textContent = label;
@@ -205,11 +264,16 @@ function renderUrlSignals(urlSignals) {
   const content = document.getElementById("results-url-evidence");
   panel.hidden = false;
   clear(content);
-  const findings = Array.isArray(urlSignals?.findings) ? urlSignals.findings : [];
+  if (!Array.isArray(urlSignals?.findings)) {
+    setResultStatus("results-url-status", "URL-structure checks are not configured.", "warning");
+    content.append(element("p", "result-content", "No configured local checks were available for this investigation."));
+    return;
+  }
 
+  const findings = urlSignals.findings;
   if (findings.length === 0) {
-    setResultStatus("results-url-status", "No configured URL-structure indicators were found.");
-    content.append(element("p", "result-content", "The local checks cover selected patterns only and do not establish that a URL is safe."));
+    setResultStatus("results-url-status", "No suspicious patterns detected by the configured checks.");
+    content.append(element("p", "result-content", "These selected local checks do not establish that a URL is safe."));
     return;
   }
 
@@ -220,10 +284,15 @@ function renderUrlSignals(urlSignals) {
     if (finding.severity) {
       item.append(element("span", "signal-observed", `Severity: ${finding.severity}`));
     }
-    if (finding.description) {
-      item.append(element("p", "evidence-snippet", finding.description));
+    if (finding.explanation || finding.description) {
+      item.append(element("p", "evidence-snippet", finding.explanation || finding.description));
     }
-    if (finding.evidence) {
+    if (finding.observedFeature && typeof finding.observedFeature === "object") {
+      const { label, value } = finding.observedFeature;
+      if (label || value) {
+        item.append(element("p", "signal-observed", [label, value].filter(Boolean).join(": ")));
+      }
+    } else if (finding.evidence) {
       item.append(element("p", "signal-observed", finding.evidence));
     }
     content.append(item);
@@ -233,19 +302,20 @@ function renderUrlSignals(urlSignals) {
 function renderEthereumAssessment(assessment) {
   const panel = document.getElementById("results-ethereum");
   const content = document.getElementById("results-ethereum-evidence");
-  if (!assessment || assessment.status === "not_requested") {
-    panel.hidden = true;
-    return;
-  }
-
   panel.hidden = false;
   clear(content);
-  const tone = assessment.status === "available" ? "" : "warning";
+  const status = assessment && assessment.status;
+  const tone = status === "available" ? "" : "warning";
+  if (!assessment || typeof assessment !== "object") {
+    setResultStatus("results-ethereum-status", "Ethereum RPC assessment is unavailable.", tone);
+    content.append(element("p", "result-content", "No network or bytecode observations were returned."));
+    return;
+  }
   setResultStatus(
     "results-ethereum-status",
-    assessment.status === "available"
+    status === "available"
       ? "Read-only Ethereum RPC observations are available."
-      : `Ethereum RPC assessment is ${assessment.status || "unavailable"}${assessment.reason ? ` (${assessment.reason})` : ""}.`,
+      : `Ethereum RPC assessment is ${status || "unavailable"}${assessment.reason ? ` (${assessment.reason})` : ""}.`,
     tone
   );
 
@@ -303,13 +373,13 @@ function renderCapabilities(container, capabilities) {
 function renderContractAnalysis(analysis) {
   const panel = document.getElementById("results-contract");
   const content = document.getElementById("results-contract-evidence");
-  if (!analysis) {
-    panel.hidden = true;
-    return;
-  }
-
   panel.hidden = false;
   clear(content);
+  if (!analysis) {
+    setResultStatus("results-contract-status", "Verified source analysis is unavailable.", "warning");
+    content.append(element("p", "result-content", "No source analysis was returned for the submitted contract address."));
+    return;
+  }
   const statusText = STATUS_LABELS[analysis.status] || analysis.status || "Unknown";
   const tone = analysis.status === "available" ? "" : "warning";
   setResultStatus(
@@ -394,8 +464,10 @@ function renderResults(data, submittedUrl, contractAddress) {
   }
   investigationContext.append(context);
   renderWebsiteResults(data);
-  renderSiteStatus(data.threatAssessment);
+  renderThreatAssessment(data.threatAssessment);
   renderUrlSignals(data.urlSignals);
+  renderSiteStatus(data.threatAssessment, data.urlSignals);
+  resultsWeb3.hidden = !contractAddress;
   renderEthereumAssessment(data.ethereumAssessment);
   renderContractAnalysis(data.contractAnalysis);
   results.hidden = false;
@@ -406,7 +478,7 @@ function validateSubmission(submittedUrl, contractAddress) {
   try {
     parsedUrl = new URL(submittedUrl);
   } catch {
-    return { message: "Open the website you want to investigate, then reopen ChainShield from that tab.", field: null };
+    return { message: "Enter a valid HTTP or HTTPS website URL.", field: urlInput };
   }
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     return { message: "Only HTTP and HTTPS website URLs are supported.", field: urlInput };
@@ -462,6 +534,9 @@ async function investigate(event) {
     } catch {
       throw new Error("The investigation service returned an unreadable response.");
     }
+    if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray(data.evidence)) {
+      throw new Error("The investigation service returned an incomplete report.");
+    }
     if (!response.ok) {
       const message = typeof data.error === "string" ? data.error : "The investigation could not be completed.";
       throw new Error(message);
@@ -516,4 +591,6 @@ const activeWebsite = safeHttpUrl(new URLSearchParams(location.search).get("targ
 if (activeWebsite) {
   urlInput.value = activeWebsite;
   setFormMessage(`Ready to investigate the website open in your browser: ${new URL(activeWebsite).hostname}.`);
+} else {
+  setFormMessage("No active website URL was provided. Enter an HTTP or HTTPS URL to investigate.");
 }
