@@ -10,6 +10,11 @@ const {
   checkSafeBrowsing
 } = require("../safe-browsing");
 const { analyzeUrl } = require("../url-analysis");
+const {
+  EthereumRpcError,
+  checkEthereumContract,
+  validateContractAddress
+} = require("../ethereum-rpc");
 
 
 const router = express.Router();
@@ -171,13 +176,25 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "Only HTTP and HTTPS URLs are supported." });
   }
 
+  if (contractAddress !== undefined && contractAddress !== "" && !validateContractAddress(contractAddress)) {
+    return res.status(400).json({
+      error: "contractAddress must be a 20-byte hexadecimal address beginning with 0x."
+    });
+  }
+
   const domain = url.hostname;
   const urlSignals = { findings: analyzeUrl(url) };
 
   try {
-    const [searchResult, threatResult] = await Promise.allSettled([
+    const effectiveContractAddress = contractAddress !== undefined && contractAddress !== "" ? contractAddress : undefined;
+    const ethereumPromise = effectiveContractAddress
+      ? checkEthereumContract(effectiveContractAddress)
+      : Promise.resolve(null);
+
+    const [searchResult, threatResult, ethereumResult] = await Promise.allSettled([
       searchTinyFish(buildInvestigationQuery(domain)),
-      checkSafeBrowsing(url.toString())
+      checkSafeBrowsing(url.toString()),
+      ethereumPromise
     ]);
 
     if (searchResult.status === "rejected") {
@@ -185,6 +202,9 @@ router.post("/", async (req, res) => {
     }
 
     const threatAssessment = buildThreatAssessment(threatResult);
+    const ethereumAssessment = effectiveContractAddress
+      ? buildEthereumAssessment(ethereumResult, effectiveContractAddress)
+      : { status: "not_requested" };
     const results = searchResult.value;
     const evidence = prepareEvidence(results, domain);
 
@@ -207,7 +227,7 @@ if (evidence.length === 0) {
         demo: false,
         threatAssessment,
         urlSignals,
-        alternativeSites
+        ethereumAssessment
       });
     }
 
@@ -220,6 +240,7 @@ return res.json({
   demo: false,
   threatAssessment,
   urlSignals,
+  ethereumAssessment,
   alternativeSites
 });
   } catch (error) {
