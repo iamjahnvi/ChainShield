@@ -790,6 +790,60 @@ input:focus-visible {
   min-height: 78px;
 }
 
+.workspace-topbar .button {
+  margin-left: auto;
+}
+
+.compact-scan-bar {
+  display: none;
+}
+
+.workspace-view.is-minimized > :not(.compact-scan-bar) {
+  display: none;
+}
+
+.workspace-view.is-minimized .compact-scan-bar {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px max(24px, calc((100vw - 760px) / 2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.compact-scan-bar > span:nth-child(2) {
+  flex: 0 1 520px;
+}
+
+.compact-scan-indicator {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--quiet);
+}
+
+.compact-scan-indicator[data-state="loading"] {
+  background: var(--teal);
+  box-shadow: 0 0 0 5px rgba(52, 199, 176, .12);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.compact-scan-indicator[data-state="success"] {
+  background: var(--green);
+}
+
+.compact-scan-indicator[data-state="error"] {
+  background: var(--red);
+}
+
+@keyframes pulse {
+  50% { opacity: .45; }
+}
+
 .workspace-tag {
   display: inline-flex;
   align-items: center;
@@ -834,7 +888,7 @@ input:focus-visible {
   margin-top: 34px;
   padding: clamp(20px, 3vw, 30px);
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, .85fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px 24px;
   border: 1px solid rgba(119, 146, 155, .23);
   border-radius: 13px;
@@ -916,6 +970,13 @@ input:focus-visible {
   color: var(--quiet);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.contract-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
 }
 
 .form-submit-row {
@@ -1482,6 +1543,10 @@ input:focus-visible {
     padding: 18px;
   }
 
+  .contract-action-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .form-submit-row {
     align-items: flex-start;
     flex-direction: column;
@@ -1545,6 +1610,19 @@ input:focus-visible {
   .workspace-tag {
     font-size: 8px;
     letter-spacing: .07em;
+  }
+
+  .workspace-topbar {
+    flex-wrap: wrap;
+  }
+
+  .workspace-topbar .button {
+    margin-left: 0;
+  }
+
+  .workspace-view.is-minimized .compact-scan-bar {
+    padding: 20px;
+    flex-wrap: wrap;
   }
 }
 

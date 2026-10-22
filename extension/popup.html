@@ -149,9 +149,9 @@
             <div class="step-copy">
               <p class="eyebrow"><span class="eyebrow-mark"></span> YOUR INVESTIGATION WORKSPACE</p>
               <h2 class="step-heading" id="step-heading-4">Investigate before you interact.</h2>
-              <p class="step-supporting">Enter a website URL, optionally add an Ethereum contract address, then review the available evidence and limitations.</p>
+              <p class="step-supporting">Open the website you want to review, optionally add an Ethereum contract address, then inspect the available evidence and limitations.</p>
               <ol class="workflow-list">
-                <li><span>1</span><p><strong>Enter a website URL</strong><small>Website and contract are separate inputs.</small></p></li>
+                <li><span>1</span><p><strong>Open the website to investigate</strong><small>ChainShield picks up the active browser tab.</small></p></li>
                 <li><span>2</span><p><strong>Optionally add an Ethereum address</strong><small>No wallet connection or transaction is involved.</small></p></li>
                 <li><span>3</span><p><strong>Review each result independently</strong><small>Unavailable or missing checks are not safety verdicts.</small></p></li>
               </ol>
@@ -161,11 +161,11 @@
               <div class="workspace-preview">
                 <div class="preview-brand"><span class="brand-mark brand-mark-small">C</span><strong>ChainShield</strong><span>WEBSITE + WEB3</span></div>
                 <p class="preview-title">Investigate before you interact.</p>
-                <label>Website URL</label>
-                <div class="preview-input">https://your-site.example</div>
+                <label>Current website</label>
+                <div class="preview-input">Detected from your active tab</div>
                 <label>Optional Ethereum contract address</label>
                 <div class="preview-input preview-input-muted">0x… (40 hexadecimal characters)</div>
-                <div class="preview-button">Investigate website</div>
+                <div class="preview-button">Investigate this website</div>
                 <p class="preview-disclaimer">Preview only — no sample results are shown.</p>
               </div>
             </div>
@@ -181,6 +181,11 @@
       </section>
 
       <section id="workspace-view" class="workspace-view" aria-labelledby="workspace-title" hidden>
+        <div class="compact-scan-bar" id="compact-scan-bar" aria-live="polite">
+          <span class="compact-scan-indicator" id="compact-scan-indicator"></span>
+          <span id="compact-scan-status">ChainShield is ready.</span>
+          <button class="button button-quiet" id="expand-workspace" type="button">Maximize report</button>
+        </div>
         <header class="topbar workspace-topbar">
           <a class="brand" href="#" aria-label="ChainShield home">
             <span class="brand-mark" aria-hidden="true">C</span>
@@ -190,6 +195,7 @@
             </span>
           </a>
           <span class="workspace-tag"><span class="eyebrow-mark"></span> INVESTIGATION WORKSPACE</span>
+          <button class="button button-quiet" id="minimize-workspace" type="button" aria-label="Minimize ChainShield workspace">Minimize</button>
         </header>
 
         <main class="workspace-main">
@@ -200,26 +206,21 @@
           </section>
 
           <form id="investigation-form" class="investigation-form" novalidate>
-            <div class="form-main">
-              <label for="url-input">Website URL <span>REQUIRED</span></label>
-              <div class="input-wrap input-wrap-url">
-                <span class="input-prefix" aria-hidden="true">↗</span>
-                <input id="url-input" name="url" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com" required>
-              </div>
-              <p class="field-hint">Enter the complete website address, including http:// or https://.</p>
-            </div>
+            <input id="url-input" name="url" type="hidden">
             <div class="form-secondary">
               <label for="contract-input">Ethereum contract address <span>OPTIONAL</span></label>
-              <div class="input-wrap">
-                <span class="input-prefix input-prefix-eth" aria-hidden="true">◇</span>
-                <input id="contract-input" name="contractAddress" type="text" inputmode="text" maxlength="42" autocomplete="off" spellcheck="false" placeholder="0x… (40 hexadecimal characters)">
+              <div class="contract-action-row">
+                <div class="input-wrap">
+                  <span class="input-prefix input-prefix-eth" aria-hidden="true">◇</span>
+                  <input id="contract-input" name="contractAddress" type="text" inputmode="text" maxlength="42" autocomplete="off" spellcheck="false" placeholder="0x… (40 hexadecimal characters)">
+                </div>
+                <button class="button button-primary submit-button" id="investigate-button" type="submit">
+                  <span>Investigate this website</span><span aria-hidden="true">→</span>
+                </button>
               </div>
               <p class="field-hint">This address is analyzed separately; its relationship to the website is not verified.</p>
             </div>
             <div class="form-submit-row">
-              <button class="button button-primary submit-button" id="investigate-button" type="submit">
-                <span>Investigate website</span><span aria-hidden="true">→</span>
-              </button>
               <p class="form-readonly-note"><span class="readonly-dot"></span> Read-only checks · No wallet connection</p>
             </div>
             <p id="form-message" class="form-message" role="status" aria-live="polite">Results are investigative evidence, not a safety guarantee.</p>

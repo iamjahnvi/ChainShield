@@ -20,6 +20,10 @@ const formMessage = document.getElementById("form-message");
 const results = document.getElementById("results");
 const newInvestigationButton = document.getElementById("new-investigation");
 const investigationContext = document.getElementById("investigation-context");
+const minimizeWorkspaceButton = document.getElementById("minimize-workspace");
+const expandWorkspaceButton = document.getElementById("expand-workspace");
+const compactScanStatus = document.getElementById("compact-scan-status");
+const compactScanIndicator = document.getElementById("compact-scan-indicator");
 
 let currentStep = 1;
 let requestInProgress = false;
@@ -51,8 +55,16 @@ function openWorkspace() {
   localStorage.setItem(ONBOARDING_KEY, "true");
   onboardingView.hidden = true;
   workspaceView.hidden = false;
-  urlInput.focus();
+  if (!urlInput.value) urlInput.focus();
 }
+
+function setCompactStatus(message, state = "ready") {
+  compactScanStatus.textContent = message;
+  compactScanIndicator.dataset.state = state;
+}
+
+minimizeWorkspaceButton.addEventListener("click", () => workspaceView.classList.add("is-minimized"));
+expandWorkspaceButton.addEventListener("click", () => workspaceView.classList.remove("is-minimized"));
 
 function setFormMessage(message, state = "") {
   formMessage.textContent = message;
@@ -416,7 +428,7 @@ function validateSubmission(submittedUrl, contractAddress) {
   try {
     parsedUrl = new URL(submittedUrl);
   } catch {
-    return { message: "Enter a valid website URL.", field: urlInput };
+    return { message: "Open the website you want to investigate, then reopen ChainShield from that tab.", field: null };
   }
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     return { message: "Only HTTP and HTTPS website URLs are supported.", field: urlInput };
@@ -441,11 +453,12 @@ async function investigate(event) {
   const validationError = validateSubmission(submittedUrl, contractAddress);
   if (validationError) {
     setFormMessage(validationError.message, "error");
-    validationError.field.focus();
+    validationError.field?.focus();
     return;
   }
 
   requestInProgress = true;
+  setCompactStatus("Investigation is running… You can keep this view minimized.", "loading");
   const sequence = ++requestSequence;
   results.hidden = true;
   setFormMessage("Running independent website and provider checks…", "loading");
@@ -481,6 +494,7 @@ async function investigate(event) {
     }
     renderResults(data, submittedUrl, contractAddress);
     setFormMessage("Investigation complete. Review each result and its limitations.", "success");
+    setCompactStatus(`Scan complete for ${new URL(submittedUrl).hostname}. Maximize to review the evidence.`, "success");
   } catch (error) {
     if (sequence === requestSequence) {
       results.hidden = true;
@@ -490,6 +504,7 @@ async function investigate(event) {
           : error.message || "The investigation could not be completed.",
         "error"
       );
+      setCompactStatus("Scan could not be completed. Maximize ChainShield for details.", "error");
     }
   } finally {
     if (sequence === requestSequence) {
@@ -520,4 +535,11 @@ if (localStorage.getItem(ONBOARDING_KEY) === "true") {
   workspaceView.hidden = false;
 } else {
   showStep(currentStep);
+}
+
+const activeWebsite = safeHttpUrl(new URLSearchParams(location.search).get("target"));
+if (activeWebsite) {
+  urlInput.value = activeWebsite;
+  setFormMessage(`Ready to investigate the website open in your browser: ${new URL(activeWebsite).hostname}.`);
+  setCompactStatus(`Ready to investigate ${new URL(activeWebsite).hostname}.`);
 }
