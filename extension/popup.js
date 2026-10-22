@@ -556,7 +556,7 @@ async function investigate(event) {
       results.hidden = true;
       setFormMessage(
         error instanceof TypeError
-          ? "Could not connect to the local ChainShield backend. Make sure the server is running on port 3000."
+          ? ""
           : error.message || "The investigation could not be completed.",
         "error"
       );

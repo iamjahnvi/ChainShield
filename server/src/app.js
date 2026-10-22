@@ -11,7 +11,7 @@ app.use((req, res, next) => {
   const origin = req.get("Origin");
   const isChromeExtensionOrigin =
     typeof origin === "string" &&
-    /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
+    /^chrome-extension:\/\//i.test(origin);
 
   // Unpacked extension IDs vary by installation. Allow Chrome extension origins,
   // but do not grant cross-origin access to arbitrary websites.
