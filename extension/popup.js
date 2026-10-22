@@ -539,12 +539,12 @@ async function investigate(event) {
     } catch {
       throw new Error("The investigation service returned an unreadable response.");
     }
-    if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray(data.evidence)) {
-      throw new Error("The investigation service returned an incomplete report.");
-    }
     if (!response.ok) {
       const message = typeof data.error === "string" ? data.error : "The investigation could not be completed.";
       throw new Error(message);
+    }
+    if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray(data.evidence)) {
+      throw new Error("The investigation service returned an incomplete report.");
     }
     if (sequence !== requestSequence) {
       return;
