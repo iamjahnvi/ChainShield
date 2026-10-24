@@ -15,7 +15,9 @@ const {
   checkEthereumContract,
   validateContractAddress
 } = require("../ethereum-rpc");
-
+const {
+  analyzeContractSource
+} = require("../etherscan");
 
 const router = express.Router();
 
@@ -159,7 +161,8 @@ const ERROR_RESPONSES = {
 
 router.post("/", async (req, res) => {
   const {
-    url: submittedUrl
+    url: submittedUrl,
+    contractAddress
   } = req.body || {};
   if (typeof submittedUrl !== "string" || submittedUrl.trim() === "") {
     return res.status(400).json({ error: "A URL is required." });
@@ -205,6 +208,16 @@ router.post("/", async (req, res) => {
     const ethereumAssessment = effectiveContractAddress
       ? buildEthereumAssessment(ethereumResult, effectiveContractAddress)
       : { status: "not_requested" };
+    let contractAnalysis;
+    if (effectiveContractAddress) {
+      try {
+        const chainId = ethereumAssessment.status === "available" ? ethereumAssessment.chainId : undefined;
+        const analysisResult = await analyzeContractSource(effectiveContractAddress, chainId);
+        contractAnalysis = analysisResult;
+      } catch (error) {
+        contractAnalysis = { status: "unavailable" };
+      }
+    }
     const results = searchResult.value;
     const evidence = prepareEvidence(results, domain);
 
@@ -227,7 +240,8 @@ if (evidence.length === 0) {
         demo: false,
         threatAssessment,
         urlSignals,
-        ethereumAssessment
+        ethereumAssessment,
+        contractAnalysis: effectiveContractAddress ? contractAnalysis : undefined
       });
     }
 
@@ -241,6 +255,7 @@ return res.json({
   threatAssessment,
   urlSignals,
   ethereumAssessment,
+  contractAnalysis: effectiveContractAddress ? contractAnalysis : undefined,
   alternativeSites
 });
   } catch (error) {
