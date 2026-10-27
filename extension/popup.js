@@ -228,30 +228,35 @@ function renderThreatAssessment(assessment) {
   }
 }
 
-function renderSiteStatus(assessment, urlSignals) {
+function renderSiteStatus(verdict, assessment, urlSignals) {
   const status = assessment && assessment.status;
   const findings = Array.isArray(urlSignals?.findings) ? urlSignals.findings : null;
-  let label;
-  let tone = "warning";
-  let explanation;
-
-  if (status === "reported") {
-    label = "Known threat detected";
-    tone = "error";
-    explanation = "Google Safe Browsing reported a threat match for this URL.";
-  } else if (findings && findings.length > 0) {
-    label = "Suspicious indicators found";
-    explanation = "Configured URL-structure checks found patterns to review. These patterns do not prove malicious behavior.";
-  } else if (status === "no_match") {
-    label = "No known threats reported";
-    explanation = "Google Safe Browsing returned no reported match. This does not verify the site's identity or guarantee safety.";
-  } else if (status === "unavailable") {
-    label = "Threat check unavailable";
-    explanation = "Google Safe Browsing could not provide a result. The website has not been verified.";
-  } else {
-    label = "Inconclusive";
-    explanation = "The available checks do not support a reliable overall conclusion.";
-  }
+  const labels = {
+    known_threat_detected: "Known threat detected",
+    trusted_official_domain: "Trusted official-domain evidence found",
+    suspicious_indicators: "Suspicious indicators found",
+    no_known_threats_found: "No known threats found",
+    inconclusive: "Inconclusive"
+  };
+  const label = labels[verdict?.status] || (
+    status === "reported"
+      ? "Known threat detected"
+      : findings && findings.length > 0
+        ? "Suspicious indicators found"
+        : status === "no_match"
+          ? "No known threats reported"
+          : status === "unavailable"
+            ? "Threat check unavailable"
+            : "Inconclusive"
+  );
+  const tone = verdict?.status === "known_threat_detected" || status === "reported"
+    ? "error"
+    : verdict?.status === "suspicious_indicators" || (findings && findings.length > 0)
+      ? "warning"
+      : "warning";
+  const explanation = Array.isArray(verdict?.reasons) && verdict.reasons.length > 0
+    ? verdict.reasons.join(" ")
+    : verdict?.summary || "The available checks do not support a reliable overall conclusion.";
 
   siteStatusBadge.textContent = label;
   siteStatusBadge.dataset.tone = tone;
@@ -465,7 +470,7 @@ function renderResults(data, submittedUrl) {
   renderWebsiteResults(data);
   renderThreatAssessment(data.threatAssessment);
   renderUrlSignals(data.urlSignals);
-  renderSiteStatus(data.threatAssessment, data.urlSignals);
+  renderSiteStatus(data.verdict, data.threatAssessment, data.urlSignals);
   renderEthereumAssessment(data.ethereumAssessment);
   if (data.contractAnalysis) {
     renderContractAnalysis(data.contractAnalysis);
@@ -552,7 +557,13 @@ async function investigate(event) {
     if (
       !Array.isArray(data.evidence) ||
       !data.threatAssessment ||
-      !Array.isArray(data.urlSignals?.findings)
+      !Array.isArray(data.urlSignals?.findings) ||
+      (data.verdict && (
+        typeof data.verdict.status !== "string" ||
+        typeof data.verdict.summary !== "string" ||
+        !Array.isArray(data.verdict.reasons) ||
+        !Array.isArray(data.verdict.evidenceReferences)
+      ))
     ) {
       throw new Error("The investigation service returned an incomplete report.");
     }

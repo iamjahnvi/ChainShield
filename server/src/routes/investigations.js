@@ -18,6 +18,7 @@ const {
 const {
   analyzeContractSource
 } = require("../etherscan");
+const { buildVerdict } = require("../verdict");
 
 const router = express.Router();
 
@@ -103,9 +104,27 @@ function buildThreatAssessment(result) {
         name: "Google Safe Browsing",
         status: matches.length > 0 ? "reported" : "no_match",
         scope: "submitted_url",
+        httpStatus,
         matches
       }
     ]
+  };
+}
+
+function buildTinyFishProvider(result) {
+  if (result.status === "fulfilled") {
+    return { id: "tinyfish_search", name: "TinyFish Search", status: "available" };
+  }
+
+  const error = result.reason;
+  return {
+    id: "tinyfish_search",
+    name: "TinyFish Search",
+    status: "unavailable",
+    reason: error instanceof TinyFishError ? error.code : "provider_error",
+    ...(error instanceof TinyFishError && error.upstreamStatus !== undefined
+      ? { httpStatus: error.upstreamStatus }
+      : {})
   };
 }
 
@@ -131,33 +150,6 @@ function buildEthereumAssessment(result, contractAddress) {
   };
 }
 
-const ERROR_RESPONSES = {
-  config_missing: {
-    status: 503,
-    error:
-      "The server is missing its search API configuration. Set TINYFISH_API_KEY in server/.env and restart the backend."
-  },
-  timeout: {
-    status: 504,
-    error: "The web search timed out. Please try again."
-  },
-  rate_limited: {
-    status: 503,
-    error: "The web search service is busy. Please try again shortly."
-  },
-  upstream: {
-    status: 502,
-    error: "The web search service is unavailable. Please try again later."
-  },
-  bad_response: {
-    status: 502,
-    error: "The web search service returned an unexpected response. Please try again later."
-  },
-  network: {
-    status: 502,
-    error: "The web search service is unreachable. Please try again later."
-  }
-};
 
 router.post("/", async (req, res) => {
   const {
@@ -200,11 +192,8 @@ router.post("/", async (req, res) => {
       ethereumPromise
     ]);
 
-    if (searchResult.status === "rejected") {
-      throw searchResult.reason;
-    }
-
     const threatAssessment = buildThreatAssessment(threatResult);
+    const tinyFishProvider = buildTinyFishProvider(searchResult);
     const ethereumAssessment = effectiveContractAddress
       ? buildEthereumAssessment(ethereumResult, effectiveContractAddress)
       : { status: "not_requested" };
@@ -218,8 +207,14 @@ router.post("/", async (req, res) => {
         contractAnalysis = { status: "unavailable" };
       }
     }
-    const results = searchResult.value;
-    const evidence = prepareEvidence(results, domain);
+    const searchEvidence = searchResult.status === "fulfilled" ? searchResult.value : [];
+    const evidence = prepareEvidence(searchEvidence, domain);
+    const providerStatuses = {
+      tinyfish: tinyFishProvider.status,
+      safeBrowsing: threatAssessment.status === "unavailable" ? "unavailable" : "available"
+    };
+    const verdict = buildVerdict({ threatAssessment, urlSignals, providerStatuses });
+    const providers = [tinyFishProvider, ...threatAssessment.providers];
 
 const alternativeSites = {};
 if (domain === "zzztd.com") {
@@ -232,12 +227,16 @@ if (domain === "zzztd.com") {
 
 if (evidence.length === 0) {
       return res.json({
-        status: "no_results",
-        summary: NO_RESULTS_SUMMARY,
+        status: searchResult.status === "rejected" ? "partial" : "no_results",
+        summary: searchResult.status === "rejected"
+          ? "TinyFish search was unavailable. Available independent checks are included below."
+          : NO_RESULTS_SUMMARY,
         domain,
         evidence: [],
         investigationType: "web_search",
         demo: false,
+        providers,
+        verdict,
         threatAssessment,
         urlSignals,
         ethereumAssessment,
@@ -246,12 +245,16 @@ if (evidence.length === 0) {
     }
 
 return res.json({
-  status: "research_available",
-  summary: buildSummary(domain, evidence),
+  status: searchResult.status === "rejected" ? "partial" : "research_available",
+  summary: searchResult.status === "rejected"
+    ? "TinyFish search was unavailable. Available independent checks are included below."
+    : buildSummary(domain, evidence),
   domain,
   evidence,
   investigationType: "web_search",
   demo: false,
+  providers,
+  verdict,
   threatAssessment,
   urlSignals,
   ethereumAssessment,
@@ -259,25 +262,10 @@ return res.json({
   alternativeSites
 });
   } catch (error) {
-    const isTinyFishError = error instanceof TinyFishError;
-    const code = isTinyFishError ? error.code : "unknown";
-    const mapped =
-      ERROR_RESPONSES[code] || {
-        status: 500,
-        error: "Something went wrong while running the web search."
-      };
-    const upstreamStatus =
-      isTinyFishError && error.upstreamStatus !== undefined
-        ? `, upstreamStatus=${error.upstreamStatus}`
-        : "";
-
     console.error(
-      `[investigations] web search failed (code=${code}${upstreamStatus}, errorName=${
-        error && error.name ? error.name : "unknown"
-      })`
+      `[investigations] request failed (errorName=${error && error.name ? error.name : "unknown"})`
     );
-
-    return res.status(mapped.status).json({ error: mapped.error });
+    return res.status(500).json({ error: "Something went wrong while running the investigation." });
   }
 });
 
