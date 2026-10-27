@@ -394,7 +394,9 @@ function renderCapabilities(container, capabilities) {
 
 function renderContractAnalysis(analysis) {
   const panel = document.getElementById("results-contract");
+  const web3Panel = document.getElementById("results-web3");
   const content = document.getElementById("results-contract-evidence");
+  web3Panel.hidden = false;
   panel.hidden = false;
   clear(content);
   if (!analysis) {
@@ -487,10 +489,23 @@ function renderResults(data, submittedUrl) {
   renderUrlSignals(data.urlSignals);
   renderSiteStatus(data.threatAssessment, data.urlSignals, data.alternativeSites);
   renderEthereumAssessment(data.ethereumAssessment);
+  if (data.contractAnalysis) {
+    renderContractAnalysis(data.contractAnalysis);
+    resultsWeb3.hidden = false;
+  }
   results.hidden = false;
 }
 
-function validateSubmission(submittedUrl) {
+function validateSubmission(submittedUrl, contractAddress) {
+  // If a contract address is provided, we still need a URL but can be more lenient
+  if (contractAddress && contractAddress.trim() !== "") {
+    // Validate contract address format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(contractAddress.trim())) {
+      return { message: "Contract address must be a 40-character hexadecimal string starting with 0x.", field: contractAddressInput };
+    }
+  }
+
+  // URL is always required
   let parsedUrl;
   try {
     parsedUrl = new URL(submittedUrl);
@@ -526,10 +541,11 @@ async function investigate(event) {
   }
 
   const submittedUrl = urlInput.value.trim();
-  const validationError = validateSubmission(submittedUrl);
+  const contractAddress = contractAddressInput.value.trim();
+  const validationError = validateSubmission(submittedUrl, contractAddress);
   if (validationError) {
     setFormMessage(validationError.message, "error");
-    urlInput.focus();
+    validationError.field.focus();
     return;
   }
 
@@ -540,7 +556,6 @@ async function investigate(event) {
   submitButton.disabled = true;
   submitButton.setAttribute("aria-busy", "true");
 
-  const contractAddress = contractAddressInput.value.trim();
   const requestBody = { url: submittedUrl };
   if (contractAddress !== "") {
     requestBody.contractAddress = contractAddress;
@@ -565,7 +580,11 @@ async function investigate(event) {
       const message = typeof data.error === "string" ? data.error : "The investigation could not be completed.";
       throw new Error(message);
     }
-    if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray(data.evidence)) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("The investigation service returned an incomplete report.");
+    }
+    // Allow responses with either website evidence or contract analysis
+    if (!Array.isArray(data.evidence) && !data.contractAnalysis) {
       throw new Error("The investigation service returned an incomplete report.");
     }
     if (sequence !== requestSequence) {
