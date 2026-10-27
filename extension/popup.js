@@ -480,19 +480,27 @@ function renderContractAnalysis(analysis) {
 }
 
 function renderResults(data, submittedUrl) {
+  console.log("[ChainShield] renderResults called with:", data);
   clear(investigationContext);
   const context = element("span");
   context.append(element("strong", "", "Website: "), document.createTextNode(submittedUrl));
   investigationContext.append(context);
+  console.log("[ChainShield] Rendering website results");
   renderWebsiteResults(data);
+  console.log("[ChainShield] Rendering threat assessment");
   renderThreatAssessment(data.threatAssessment);
+  console.log("[ChainShield] Rendering URL signals");
   renderUrlSignals(data.urlSignals);
+  console.log("[ChainShield] Rendering site status");
   renderSiteStatus(data.threatAssessment, data.urlSignals, data.alternativeSites);
+  console.log("[ChainShield] Rendering Ethereum assessment");
   renderEthereumAssessment(data.ethereumAssessment);
   if (data.contractAnalysis) {
+    console.log("[ChainShield] Rendering contract analysis");
     renderContractAnalysis(data.contractAnalysis);
     resultsWeb3.hidden = false;
   }
+  console.log("[ChainShield] Showing results panel");
   results.hidden = false;
 }
 
@@ -562,6 +570,7 @@ async function investigate(event) {
   }
 
   try {
+    console.log("[ChainShield] Starting investigation for:", submittedUrl);
     const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -570,29 +579,38 @@ async function investigate(event) {
       cache: "no-store",
       redirect: "error"
     });
+    console.log("[ChainShield] Response status:", response.status, response.statusText);
     let data;
     try {
       data = await response.json();
+      console.log("[ChainShield] Response data:", data);
     } catch {
+      console.error("[ChainShield] Failed to parse JSON response");
       throw new Error("The investigation service returned an unreadable response.");
     }
     if (!response.ok) {
       const message = typeof data.error === "string" ? data.error : "The investigation could not be completed.";
+      console.error("[ChainShield] API error:", message);
       throw new Error(message);
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) {
+      console.error("[ChainShield] Invalid data structure:", data);
       throw new Error("The investigation service returned an incomplete report.");
     }
     // Allow responses with either website evidence or contract analysis
     if (!Array.isArray(data.evidence) && !data.contractAnalysis) {
+      console.error("[ChainShield] Missing both evidence and contractAnalysis");
       throw new Error("The investigation service returned an incomplete report.");
     }
     if (sequence !== requestSequence) {
+      console.log("[ChainShield] Sequence mismatch, ignoring");
       return;
     }
+    console.log("[ChainShield] Rendering results");
     renderResults(data, submittedUrl);
     setFormMessage("Investigation complete. Review each result and its limitations.", "success");
   } catch (error) {
+    console.error("[ChainShield] Investigation error:", error);
     if (sequence === requestSequence) {
       results.hidden = true;
       setFormMessage(
