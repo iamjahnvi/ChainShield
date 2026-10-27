@@ -5,10 +5,14 @@
   "description": "Local demo API for the ChainShield Chrome extension",
   "main": "src/app.js",
   "scripts": {
-  "start": "node src/app.js"
+    "start": "node src/app.js",
+    "test": "node --test"
   },
   "dependencies": {
     "dotenv": "^18.0.8",
     "express": "^4.21.2"
+  },
+  "overrides": {
+    "body-parser": "^1.20.9"
   }
 }
