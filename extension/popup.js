@@ -222,63 +222,35 @@ function renderThreatAssessment(assessment) {
   }
 }
 
-function renderSiteStatus(assessment, urlSignals, alternativeSites = {}) {
-  let status = assessment && assessment.status;
-  let label;
-  let tone;
-  let explanation;
+function renderSiteStatus(assessment, urlSignals) {
+  const status = assessment && assessment.status;
   const findings = Array.isArray(urlSignals?.findings) ? urlSignals.findings : null;
-  const hostname = new URL(assessment?.url || urlSignals?.url || "").hostname.toLowerCase();
+  let label;
+  let tone = "warning";
+  let explanation;
 
-  if (hostname === "zzztd.com") {
-    label = "Unverified website";
-    tone = "error";
-    explanation = "This website is not approved and has been flagged for review.";
-  } else if (hostname === "metamask.io") {
-    label = "Verified";
-    tone = "good";
-    explanation = "This website is verified and safe.";
-  } else if (status === "reported") {
+  if (status === "reported") {
     label = "Known threat detected";
     tone = "error";
     explanation = "Google Safe Browsing reported a threat match for this URL.";
   } else if (findings && findings.length > 0) {
     label = "Suspicious indicators found";
-    tone = "warning";
     explanation = "Configured URL-structure checks found patterns to review. These patterns do not prove malicious behavior.";
   } else if (status === "no_match") {
     label = "No known threats reported";
-    tone = "warning";
     explanation = "Google Safe Browsing returned no reported match. This does not verify the site's identity or guarantee safety.";
+  } else if (status === "unavailable") {
+    label = "Threat check unavailable";
+    explanation = "Google Safe Browsing could not provide a result. The website has not been verified.";
   } else {
-    label = "Check unavailable";
-    tone = "warning";
-    if (status !== "unavailable") {
-      label = "Inconclusive";
-      explanation = "The available checks do not support a reliable overall conclusion.";
-    } else {
-      explanation = "Google Safe Browsing could not provide a result. The website has not been verified.";
-    }
-  }
-
-  const altLabel = alternativeSites[hostname] || alternativeSites.label;
-  let altHtml = "";
-  if (altLabel && hostname === "zzztd.com") {
-    altHtml = `
-      <div class="alternative-sites">
-        <strong>Best alternative website:</strong> 
-        <a href="https://www.binance.com/en-IN" target="_blank" class="alternative-link">Binance</a>
-      </div>
-    `;
+    label = "Inconclusive";
+    explanation = "The available checks do not support a reliable overall conclusion.";
   }
 
   siteStatusBadge.textContent = label;
   siteStatusBadge.dataset.tone = tone;
   siteStatusBadge.title = explanation;
   siteStatusBadge.setAttribute("aria-label", `${label}. ${explanation}`);
-  if (altHtml) {
-    siteStatusBadge.innerHTML += altHtml;
-  }
 }
 
 function renderUrlSignals(urlSignals) {
@@ -480,27 +452,19 @@ function renderContractAnalysis(analysis) {
 }
 
 function renderResults(data, submittedUrl) {
-  console.log("[ChainShield] renderResults called with:", data);
   clear(investigationContext);
   const context = element("span");
   context.append(element("strong", "", "Website: "), document.createTextNode(submittedUrl));
   investigationContext.append(context);
-  console.log("[ChainShield] Rendering website results");
   renderWebsiteResults(data);
-  console.log("[ChainShield] Rendering threat assessment");
   renderThreatAssessment(data.threatAssessment);
-  console.log("[ChainShield] Rendering URL signals");
   renderUrlSignals(data.urlSignals);
-  console.log("[ChainShield] Rendering site status");
-  renderSiteStatus(data.threatAssessment, data.urlSignals, data.alternativeSites);
-  console.log("[ChainShield] Rendering Ethereum assessment");
+  renderSiteStatus(data.threatAssessment, data.urlSignals);
   renderEthereumAssessment(data.ethereumAssessment);
   if (data.contractAnalysis) {
-    console.log("[ChainShield] Rendering contract analysis");
     renderContractAnalysis(data.contractAnalysis);
     resultsWeb3.hidden = false;
   }
-  console.log("[ChainShield] Showing results panel");
   results.hidden = false;
 }
 
@@ -532,22 +496,6 @@ async function investigate(event) {
     return;
   }
 
-  // Auto-detect active tab URL
-  let autoUrl = "";
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab && tab.url) {
-      autoUrl = tab.url;
-    }
-  } catch (err) {
-    // If we can't query tabs, continue with manual URL
-  }
-
-  // If we found an active tab with a supported URL, use it
-  if (autoUrl && /^https?:\/\//i.test(autoUrl)) {
-    urlInput.value = autoUrl;
-  }
-
   const submittedUrl = urlInput.value.trim();
   const contractAddress = contractAddressInput.value.trim();
   const validationError = validateSubmission(submittedUrl, contractAddress);
@@ -570,7 +518,6 @@ async function investigate(event) {
   }
 
   try {
-    console.log("[ChainShield] Starting investigation for:", submittedUrl);
     const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -579,38 +526,37 @@ async function investigate(event) {
       cache: "no-store",
       redirect: "error"
     });
-    console.log("[ChainShield] Response status:", response.status, response.statusText);
     let data;
     try {
       data = await response.json();
-      console.log("[ChainShield] Response data:", data);
+
     } catch {
-      console.error("[ChainShield] Failed to parse JSON response");
+
       throw new Error("The investigation service returned an unreadable response.");
     }
     if (!response.ok) {
       const message = typeof data.error === "string" ? data.error : "The investigation could not be completed.";
-      console.error("[ChainShield] API error:", message);
+
       throw new Error(message);
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) {
-      console.error("[ChainShield] Invalid data structure:", data);
+
       throw new Error("The investigation service returned an incomplete report.");
     }
-    // Allow responses with either website evidence or contract analysis
-    if (!Array.isArray(data.evidence) && !data.contractAnalysis) {
-      console.error("[ChainShield] Missing both evidence and contractAnalysis");
+    if (
+      !Array.isArray(data.evidence) ||
+      !data.threatAssessment ||
+      !Array.isArray(data.urlSignals?.findings)
+    ) {
       throw new Error("The investigation service returned an incomplete report.");
     }
     if (sequence !== requestSequence) {
-      console.log("[ChainShield] Sequence mismatch, ignoring");
       return;
     }
-    console.log("[ChainShield] Rendering results");
     renderResults(data, submittedUrl);
     setFormMessage("Investigation complete. Review each result and its limitations.", "success");
   } catch (error) {
-    console.error("[ChainShield] Investigation error:", error);
+
     if (sequence === requestSequence) {
       results.hidden = true;
       setFormMessage(
