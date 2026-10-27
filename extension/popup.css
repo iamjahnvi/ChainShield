@@ -785,6 +785,23 @@ input:focus-visible {
   min-width: 0;
 }
 
+.contract-address-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 54px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  background: var(--bg);
+  font-size: 15px;
+}
+
+.contract-address-input:focus {
+  border-color: var(--primary);
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, .18);
+}
+
 .form-secondary > label {
   justify-content: flex-start;
 }
