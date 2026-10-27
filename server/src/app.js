@@ -31,6 +31,17 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "10kb" }));
 
+app.get("/", (req, res) => {
+  res.json({
+    name: "ChainShield API",
+    status: "ok",
+    endpoints: {
+      health: "/api/health",
+      investigations: "POST /api/investigations"
+    }
+  });
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
