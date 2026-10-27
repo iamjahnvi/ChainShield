@@ -1,5 +1,6 @@
 const API_URL = "http://localhost:3000/api/investigations";
 const ONBOARDING_KEY = "chainShieldOnboardingComplete";
+const INVESTIGATION_TARGET_KEY = "chainShieldInvestigationTarget";
 
 const onboardingView = document.getElementById("onboarding-view");
 const workspaceView = document.getElementById("workspace-view");
@@ -25,6 +26,8 @@ const contractAddressInput = document.getElementById("contract-address");
 let currentStep = 1;
 let requestInProgress = false;
 let requestSequence = 0;
+const investigationTarget = new URLSearchParams(location.search).get("target");
+const activeWebsite = safeHttpUrl(investigationTarget);
 
 function showStep(stepNumber) {
   currentStep = Math.min(Math.max(stepNumber, 1), onboardingSteps.length);
@@ -52,6 +55,9 @@ function openWorkspace() {
   localStorage.setItem(ONBOARDING_KEY, "true");
   onboardingView.hidden = true;
   workspaceView.hidden = false;
+  if (activeWebsite && !urlInput.value) {
+    urlInput.value = activeWebsite;
+  }
   if (!urlInput.value) urlInput.focus();
 }
 
@@ -496,7 +502,7 @@ async function investigate(event) {
     return;
   }
 
-  const submittedUrl = urlInput.value.trim();
+  const submittedUrl = urlInput.value.trim() || activeWebsite || "";
   const contractAddress = contractAddressInput.value.trim();
   const validationError = validateSubmission(submittedUrl, contractAddress);
   if (validationError) {
@@ -590,6 +596,16 @@ document.querySelectorAll(".brand[href='#']").forEach((brandLink) => {
   brandLink.addEventListener("click", (event) => event.preventDefault());
 });
 
+if (activeWebsite) {
+  urlInput.value = activeWebsite;
+  sessionStorage.setItem(INVESTIGATION_TARGET_KEY, activeWebsite);
+} else {
+  const rememberedTarget = safeHttpUrl(sessionStorage.getItem(INVESTIGATION_TARGET_KEY));
+  if (rememberedTarget) {
+    urlInput.value = rememberedTarget;
+  }
+}
+
 if (localStorage.getItem(ONBOARDING_KEY) === "true") {
   onboardingView.hidden = true;
   workspaceView.hidden = false;
@@ -597,10 +613,10 @@ if (localStorage.getItem(ONBOARDING_KEY) === "true") {
   showStep(currentStep);
 }
 
-const activeWebsite = safeHttpUrl(new URLSearchParams(location.search).get("target"));
 if (activeWebsite) {
-  urlInput.value = activeWebsite;
   setFormMessage(`Ready to investigate the website open in your browser: ${new URL(activeWebsite).hostname}.`);
+} else if (urlInput.value) {
+  setFormMessage(`Ready to investigate: ${new URL(urlInput.value).hostname}. You can also paste a different URL.`);
 } else {
-  setFormMessage("No active website URL was provided. Enter an HTTP or HTTPS URL to investigate.");
+  setFormMessage("No active website URL was provided. Enter or paste an HTTP or HTTPS URL to investigate.");
 }
