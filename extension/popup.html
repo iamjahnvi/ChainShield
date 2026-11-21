@@ -7,6 +7,15 @@
     <title>ChainShield — Website and Web3 investigation</title>
     <link rel="icon" href="shield.svg" type="image/svg+xml">
     <link rel="stylesheet" href="popup.css">
+    <script src="config.js" defer></script>
+    <script src="safe-alternatives.js" defer></script>
+    <script src="community.js" defer></script>
+    <script src="history.js" defer></script>
+    <script src="action-center.js" defer></script>
+    <script src="evidence-view.js" defer></script>
+    <script src="report.js" defer></script>
+    <script src="demo.js" defer></script>
+    <script src="domain-impersonation-view.js" defer></script>
     <script src="popup.js" defer></script>
   </head>
   <body>
@@ -220,18 +229,38 @@
             <p id="form-message" class="form-message" role="status" aria-live="polite">Results are investigative evidence, not a safety guarantee.</p>
           </form>
 
+          <section class="history-tools" aria-label="Demo and saved investigations">
+            <label for="demo-scenario">Demo mode <span>SIMULATED</span></label>
+            <div class="history-controls"><select id="demo-scenario"><option value="">Choose a deterministic scenario</option><option value="established">Established site</option><option value="lookalike">Possible lookalike</option><option value="phishing">Phishing-style (fictional)</option><option value="web3">Web3 contract context</option><option value="inconclusive">Unavailable provider</option></select><button id="run-demo" class="button button-quiet" type="button">Run demo</button></div>
+            <details><summary>Local scan history</summary><p class="history-note">Saved results are historical snapshots and may no longer describe a site's current state.</p><div id="history-list"></div><div class="history-controls"><button id="compare-history" class="button button-quiet" type="button">Compare selected</button><button id="clear-history" class="button button-quiet" type="button">Clear history</button></div><p id="history-status" class="result-status" aria-live="polite"></p></details>
+          </section>
+
           <section id="results" class="results" aria-labelledby="results-title" hidden>
             <div class="results-heading">
               <div>
                 <p class="eyebrow"><span class="eyebrow-mark"></span> INVESTIGATION REPORT</p>
                 <div class="results-title-row">
                   <h2 id="results-title">Results</h2>
-                  <span id="site-status-badge" class="status-badge report-status-badge" role="status" aria-live="polite"></span>
                 </div>
               </div>
-              <button id="new-investigation" class="button button-quiet" type="button">New investigation</button>
+              <div class="results-actions"><button id="export-json" class="button button-quiet" type="button">Export JSON</button><button id="print-report" class="button button-quiet" type="button">Print / Save PDF</button><button id="new-investigation" class="button button-quiet" type="button">New investigation</button></div>
             </div>
             <div class="investigation-context" id="investigation-context"></div>
+            <div id="demo-banner" class="demo-banner" hidden>DEMO / SIMULATED — these deterministic examples are not live provider results.</div>
+            <div id="historical-banner" class="historical-banner" hidden>HISTORICAL SNAPSHOT — run a fresh investigation to check current signals.</div>
+            <section id="action-center" class="action-center" aria-labelledby="action-center-heading" hidden>
+              <div class="action-center-heading"><div><p class="eyebrow">YOUR INVESTIGATION AT A GLANCE</p><h3 id="action-center-heading">Action Center</h3></div><span id="action-verdict" class="action-verdict"></span></div>
+              <p id="action-explanation" class="action-explanation"></p>
+              <div class="action-recommendation"><strong>What to do</strong><p id="action-recommendation"></p></div>
+              <div class="action-support"><strong>Most important signal</strong><p id="action-signal"></p></div>
+              <div id="action-attention-block" class="action-attention" hidden><strong>Needs attention</strong><ul id="action-attention"></ul></div>
+              <section class="action-checklist-details" aria-labelledby="action-checklist-heading"><h4 id="action-checklist-heading">Before you interact</h4><ul id="action-checklist" class="action-checklist"></ul></section>
+            </section>
+            <details id="supporting-details" class="supporting-details">
+              <summary>Supporting evidence and technical details</summary>
+              <p class="evidence-meta">Detailed verdict state: <span id="site-status-badge" class="status-badge report-status-badge" role="status" aria-live="polite"></span></p>
+            <section id="results-impersonation" class="result-panel result-panel-wide" aria-labelledby="impersonation-heading" hidden><div class="panel-heading"><span class="panel-icon">01</span><div><h3 id="impersonation-heading">Domain impersonation</h3><p>Similarity is an indicator, not a verdict</p></div></div><p id="impersonation-status" class="result-status"></p><div id="impersonation-content" class="result-content"></div></section>
+            <section id="results-explorer" class="result-panel result-panel-wide" aria-labelledby="explorer-heading" hidden><div class="panel-heading"><span class="panel-icon">02</span><div><h3 id="explorer-heading">Evidence explorer</h3><p>Provider completion and available observations</p></div></div><div id="provider-explorer" class="provider-explorer"></div></section>
             <div class="results-grid">
               <section id="results-website" class="result-panel result-panel-wide" aria-labelledby="website-heading" hidden>
                 <div class="panel-heading"><span class="panel-icon">01</span><div><h3 id="website-heading">Website intelligence</h3><p>Public search evidence</p></div></div>
@@ -249,8 +278,44 @@
                 <p class="result-status" id="results-url-status"></p>
                 <div id="results-url-evidence" class="result-content"></div>
               </section>
+              <section id="results-alternatives" class="result-panel result-panel-wide" aria-labelledby="alternatives-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon">04</span><div><h3 id="alternatives-heading">Safe Alternatives</h3><p>Directory listings with separate domain checks</p></div></div>
+                <p class="result-status" id="results-alternatives-status"></p>
+                <div id="results-alternatives-list" class="result-content"></div>
+              </section>
+              <section id="results-community" class="result-panel result-panel-wide" aria-labelledby="community-heading" hidden>
+                <div class="panel-heading"><span class="panel-icon">06</span><div><h3 id="community-heading">Community Intelligence</h3><p>User reports · pending reports are not shown</p></div></div>
+                <p class="community-disclaimer">Community submissions are unverified user reports. Approved reports add context only and do not determine ChainShield's security verdict.</p>
+                <p class="result-status" id="community-status" aria-live="polite"></p>
+                <div id="community-summary" class="result-content"></div>
+                <div id="community-reports" class="result-content"></div>
+                <button id="community-report-open" class="button button-quiet" type="button">Report this website</button>
+                <form id="community-report-form" class="community-report-form" hidden>
+                  <label for="community-category">Report category</label>
+                  <select id="community-category" required>
+                    <option value="">Choose a category</option>
+                    <option value="phishing">Phishing</option>
+                    <option value="impersonation">Impersonation</option>
+                    <option value="crypto_scam">Crypto scam</option>
+                    <option value="fake_airdrop">Fake airdrop</option>
+                    <option value="malicious_wallet_connection">Malicious wallet connection</option>
+                    <option value="suspicious_investment_platform">Suspicious investment platform</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <label for="community-description">What happened? (12–500 characters)</label>
+                  <textarea id="community-description" minlength="12" maxlength="500" required></textarea>
+                  <label for="community-evidence-url">Evidence link (optional, HTTPS only; query and fragment are removed)</label>
+                  <input id="community-evidence-url" type="url" maxlength="2048" placeholder="https://…">
+                  <p class="community-privacy-note">No account is required. Reports are reviewed before publication. A keyed, one-way network hash is used for rate limiting; the raw address is not saved in the report record. Do not include names, contact details, wallet addresses, passwords, or recovery phrases.</p>
+                  <div class="community-form-actions">
+                    <button id="community-report-submit" class="button button-primary" type="submit">Submit report</button>
+                    <button id="community-report-cancel" class="button button-quiet" type="button">Cancel</button>
+                  </div>
+                  <p id="community-form-status" class="result-status" aria-live="polite"></p>
+                </form>
+              </section>
               <section id="results-web3" class="result-panel result-panel-wide" aria-labelledby="web3-heading" hidden>
-                <div class="panel-heading"><span class="panel-icon">04</span><div><h3 id="web3-heading">Optional Web3 analysis</h3><p>Read-only Ethereum observations and Etherscan source details</p></div></div>
+                <div class="panel-heading"><span class="panel-icon">05</span><div><h3 id="web3-heading">Optional Web3 analysis</h3><p>Read-only Ethereum observations and Etherscan source details</p></div></div>
                 <p class="web3-disclaimer">Contract capabilities are not confirmed vulnerabilities. The submitted address is analyzed independently; its relationship to the website is not verified.</p>
                 <div class="web3-results-grid">
                   <section id="results-ethereum" class="web3-subpanel" aria-labelledby="ethereum-heading">
@@ -267,6 +332,7 @@
               </section>
             </div>
             <p class="report-disclaimer">ChainShield presents available evidence to support your investigation. It does not guarantee that a website or smart contract is safe.</p>
+            </details>
           </section>
         </main>
 

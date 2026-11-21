@@ -4,8 +4,15 @@ require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const express = require("express");
 const investigationsRouter = require("./routes/investigations");
+const communityRouter = require("./routes/community");
 
 const app = express();
+const proxyHops = Number(process.env.TRUST_PROXY_HOPS);
+if (Number.isInteger(proxyHops) && proxyHops >= 0 && proxyHops <= 5) {
+  app.set("trust proxy", proxyHops);
+} else if (process.env.VERCEL === "1") {
+  app.set("trust proxy", 1);
+}
 
 app.use((req, res, next) => {
   const origin = req.get("Origin");
@@ -19,7 +26,7 @@ app.use((req, res, next) => {
     res.set("Access-Control-Allow-Origin", origin);
     res.set("Vary", "Origin");
     res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
 
   if (req.method === "OPTIONS") {
@@ -37,7 +44,8 @@ app.get("/", (req, res) => {
     status: "ok",
     endpoints: {
       health: "/api/health",
-      investigations: "POST /api/investigations"
+      investigations: "POST /api/investigations",
+      community: "GET /api/community/domains/:domain, POST /api/community/reports"
     }
   });
 });
@@ -47,6 +55,7 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/investigations", investigationsRouter);
+app.use("/api/community", communityRouter);
 
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && "body" in err) {

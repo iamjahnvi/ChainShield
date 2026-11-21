@@ -11,6 +11,7 @@ const {
 } = require("../src/safe-browsing");
 const { setEthereumRpcFetch } = require("../src/ethereum-rpc");
 const { setEtherscanFetch } = require("../src/etherscan");
+const domainImpersonationAnalyzer = require("../src/domain-impersonation");
 
 const TEST_API_KEY = "unit-test-secret-key-must-never-leak";
 const TEST_SAFE_BROWSING_KEY = "safe-browsing-test-key-must-never-leak";
@@ -168,10 +169,18 @@ test("valid investigation request returns validated TinyFish results", async () 
   });
 
   assert.equal(response.status, 200);
+  assert.equal(body.safeAlternatives.status, "unavailable");
+  assert.equal(body.safeAlternatives.category, "unknown");
+  assert.equal(body.safeAlternatives.categoryConfidence, 0);
+  assert.deepEqual(body.safeAlternatives.recommendations, []);
+  assert.equal(body.verdict.status, "no_known_threats_found");
+  assert.equal(body.communityReports, undefined);
   assert.equal(body.status, "research_available");
   assert.equal(body.domain, "www.example.com");
   assert.equal(body.investigationType, "web_search");
   assert.equal(body.demo, false);
+  assert.equal(body.domainImpersonation.status, "no_match");
+  assert.equal(body.domainImpersonation.candidateDomain, "example.com");
   assert.equal(body.threatAssessment.status, "no_match");
   assert.equal(body.threatAssessment.providers[0].id, "google_safe_browsing");
   assert.equal(body.threatAssessment.providers[0].scope, "submitted_url");
@@ -264,6 +273,78 @@ test("valid investigation request returns validated TinyFish results", async () 
   assert.ok(!JSON.stringify(body).includes(TEST_SAFE_BROWSING_KEY));
   assert.ok(capturedLogs.some((entry) => entry.includes("httpStatus=200, category=no_match")));
   assert.ok(!capturedLogs.join("\n").includes("/path?q=demo"));
+});
+
+test("domain similarity is returned separately and does not independently change the verdict", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(async () => jsonResponse({}));
+  const { response, body } = await postInvestigation({ url: "https://metamaskk.io/" });
+  assert.equal(response.status, 200);
+  assert.equal(body.domainImpersonation.status, "possible_lookalike");
+  assert.equal(body.domainImpersonation.matches[0].officialDomain, "metamask.io");
+  assert.equal(body.verdict.status, "no_known_threats_found");
+  assert.equal(body.threatAssessment.status, "no_match");
+});
+
+test("investigation route returns domain similarity for lookalike, official, subdomain, unrelated, and uncatalogued domains", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(async () => jsonResponse({}));
+  const cases = [
+    ["https://metamaskk.io/", "possible_lookalike", "metamaskk.io", "metamask.io"],
+    ["https://metamask.com/", "official_domain", "metamask.com", "metamask.com"],
+    ["https://metamask.io/", "official_domain", "metamask.io", "metamask.io"],
+    ["https://support.metamask.com/", "official_subdomain", "metamask.com", "metamask.com"],
+    ["https://support.metamask.io/", "official_subdomain", "metamask.io", "metamask.io"],
+    ["https://metamaskk.com/", "possible_lookalike", "metamaskk.com", "metamask.com"],
+    ["https://example.org/", "no_match", "example.org", undefined],
+    ["https://unlisted-brand.dev/", "no_match", "unlisted-brand.dev", undefined]
+  ];
+  for (const [url, expectedStatus, expectedDomain, expectedOfficial] of cases) {
+    const { response, body } = await postInvestigation({ url });
+    assert.equal(response.status, 200);
+    assert.deepEqual(Object.keys(body.domainImpersonation).sort(), ["candidateDomain", "explanation", "matches", "status"]);
+    assert.equal(body.domainImpersonation.status, expectedStatus);
+    assert.equal(body.domainImpersonation.candidateDomain, expectedDomain);
+    assert.equal(body.domainImpersonation.matches[0]?.officialDomain, expectedOfficial);
+    if (expectedOfficial === "metamask.com" || expectedOfficial === "metamask.io") {
+      assert.ok(body.domainImpersonation.matches[0].verificationStatus.startsWith("first_party_"));
+      assert.equal(body.domainImpersonation.matches[0].verifiedAt, "2026-11-20");
+      assert.ok(Array.isArray(body.domainImpersonation.matches[0].sources));
+    }
+    if (url === "https://metamask.com/") assert.equal(body.domainImpersonation.matches[0].domainRole, "primary");
+    if (url === "https://metamask.io/") assert.equal(body.domainImpersonation.matches[0].domainRole, "redirect_alias");
+    assert.equal(body.verdict.status, "no_known_threats_found");
+  }
+});
+
+test("search mentions and branding do not make an uncatalogued host official", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [{ title: "Official MetaMask", snippet: "Welcome to MetaMask", url: "https://metamask.com/" }] }));
+  setSafeBrowsingFetch(async () => jsonResponse({}));
+  const { response, body } = await postInvestigation({ url: "https://unlisted-brand.dev/" });
+  assert.equal(response.status, 200);
+  assert.equal(body.evidence[0].title, "Official MetaMask");
+  assert.equal(body.domainImpersonation.status, "no_match");
+  assert.deepEqual(body.domainImpersonation.matches, []);
+});
+
+test("domain similarity module failure is isolated and accurately reported", async () => {
+  setSearchFetch(async () => jsonResponse({ results: [] }));
+  setSafeBrowsingFetch(async () => jsonResponse({}));
+  const original = domainImpersonationAnalyzer.analyzeDomainImpersonation;
+  domainImpersonationAnalyzer.analyzeDomainImpersonation = () => { throw new Error("private module failure"); };
+  try {
+    const { response, body } = await postInvestigation({ url: "https://example.com/" });
+    assert.equal(response.status, 200);
+    assert.deepEqual(body.domainImpersonation, {
+      status: "unavailable",
+      candidateDomain: "example.com",
+      matches: [],
+      explanation: "Domain similarity could not be evaluated for this investigation."
+    });
+    assert.equal(body.verdict.status, "no_known_threats_found");
+  } finally {
+    domainImpersonationAnalyzer.analyzeDomainImpersonation = original;
+  }
 });
 
 test("optional Ethereum assessment reports network, block, and bytecode separately", async () => {
@@ -859,15 +940,17 @@ test("missing, null, and non-array results are malformed upstream responses", as
         url: "https://example.com"
       });
 
-      assert.equal(response.status, 502);
-      assert.match(body.error, /unexpected response/i);
+      assert.equal(response.status, 200);
+      assert.equal(body.status, "partial");
+      assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").reason, "bad_response");
+      assert.equal(body.verdict.status, "inconclusive");
       assert.ok(!JSON.stringify(body).includes(TEST_API_KEY));
       assert.ok(!capturedLogs.join("\n").includes(TEST_API_KEY));
     });
   }
 });
 
-test("missing API key returns a clear configuration error without calling TinyFish", async () => {
+test("missing API key leaves a partial investigation and does not call TinyFish", async () => {
   delete process.env.TINYFISH_API_KEY;
 
   let called = false;
@@ -878,47 +961,49 @@ test("missing API key returns a clear configuration error without calling TinyFi
 
   const { response, body } = await postInvestigation({ url: "https://example.com" });
 
-  assert.equal(response.status, 503);
-  assert.match(body.error, /TINYFISH_API_KEY/);
-  assert.match(body.error, /configuration/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").reason, "config_missing");
+  assert.equal(body.threatAssessment.status, "no_match");
+  assert.equal(body.verdict.status, "inconclusive");
   assert.equal(called, false);
   assert.ok(!JSON.stringify(body).includes(TEST_API_KEY));
-  assert.ok(capturedLogs.join("\n").includes("config_missing"));
   assert.ok(!capturedLogs.join("\n").includes(TEST_API_KEY));
 });
 
-test("upstream HTTP errors are mapped to a generic 502 response", async () => {
+test("upstream HTTP errors become isolated TinyFish failures", async () => {
   setSearchFetch(async () =>
     jsonResponse({ error: "internal upstream detail" }, 500)
   );
 
   const { response, body } = await postInvestigation({ url: "https://example.com" });
 
-  assert.equal(response.status, 502);
-  assert.match(body.error, /unavailable/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").reason, "upstream");
+  assert.equal(body.verdict.status, "inconclusive");
   assert.ok(!JSON.stringify(body).includes("internal upstream detail"));
 
-  const logged = capturedLogs.join("\n");
-  assert.ok(logged.includes("upstreamStatus=500"));
-  assert.ok(!logged.includes(TEST_API_KEY));
+  assert.ok(!capturedLogs.join("\n").includes(TEST_API_KEY));
 });
 
-test("upstream rate limits are mapped to a generic busy response", async () => {
+test("TinyFish rate limits are isolated while Safe Browsing remains usable", async () => {
   setSearchFetch(async () =>
     jsonResponse({ message: `quota exceeded for key ${TEST_API_KEY}` }, 429)
   );
 
   const { response, body } = await postInvestigation({ url: "https://example.com" });
 
-  assert.equal(response.status, 503);
-  assert.match(body.error, /busy/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").reason, "rate_limited");
 
   const combined = JSON.stringify(body) + capturedLogs.join("\n");
   assert.ok(!combined.includes(TEST_API_KEY));
   assert.ok(!combined.includes("quota exceeded"));
 });
 
-test("malformed JSON from TinyFish maps to a generic 502 response", async () => {
+test("malformed JSON from TinyFish yields a partial response without provider details", async () => {
   setSearchFetch(async () => ({
     ok: true,
     status: 200,
@@ -929,12 +1014,13 @@ test("malformed JSON from TinyFish maps to a generic 502 response", async () => 
 
   const { response, body } = await postInvestigation({ url: "https://example.com" });
 
-  assert.equal(response.status, 502);
-  assert.match(body.error, /unexpected response/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").reason, "bad_response");
   assert.ok(!JSON.stringify(body).includes("Unexpected token"));
 });
 
-test("malformed response shapes map to a generic 502 response", async (t) => {
+test("malformed TinyFish response shapes preserve a partial investigation", async (t) => {
   const cases = [
     { name: "results is not an array", payload: { results: "not-an-array" } },
     { name: "payload is null", payload: null },
@@ -947,13 +1033,15 @@ test("malformed response shapes map to a generic 502 response", async (t) => {
 
       const { response, body } = await postInvestigation({ url: "https://example.com" });
 
-      assert.equal(response.status, 502);
-      assert.match(body.error, /unexpected response/i);
+      assert.equal(response.status, 200);
+      assert.equal(body.status, "partial");
+      assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").reason, "bad_response");
+      assert.equal(body.verdict.status, "inconclusive");
     });
   }
 });
 
-test("search timeouts map to a gateway timeout response", async () => {
+test("search timeouts are isolated from the investigation response", async () => {
   process.env.TINYFISH_TIMEOUT_MS = "50";
 
   setSearchFetch(
@@ -969,12 +1057,13 @@ test("search timeouts map to a gateway timeout response", async () => {
 
   const { response, body } = await postInvestigation({ url: "https://example.com" });
 
-  assert.equal(response.status, 504);
-  assert.match(body.error, /timed out/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").reason, "timeout");
   assert.ok(!capturedLogs.join("\n").includes(TEST_API_KEY));
 });
 
-test("network failures map to a generic 502 response", async () => {
+test("network failures are isolated from the investigation response", async () => {
   setSearchFetch(async () => {
     const error = new Error("connect ECONNREFUSED 127.0.0.1:1");
     error.cause = { code: "ECONNREFUSED" };
@@ -983,8 +1072,9 @@ test("network failures map to a generic 502 response", async () => {
 
   const { response, body } = await postInvestigation({ url: "https://example.com" });
 
-  assert.equal(response.status, 502);
-  assert.match(body.error, /unreachable/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").reason, "network");
   assert.ok(!JSON.stringify(body).includes("ECONNREFUSED"));
 });
 
@@ -1004,7 +1094,8 @@ test("the API key never appears in responses or logged output", async () => {
     jsonResponse({ leaked: TEST_API_KEY, message: TEST_API_KEY }, 500)
   );
   const failure = await postInvestigation({ url: "https://example.com" });
-  assert.equal(failure.response.status, 502);
+  assert.equal(failure.response.status, 200);
+  assert.equal(failure.body.status, "partial");
 
   const combined =
     JSON.stringify(success.body) +
@@ -1172,15 +1263,45 @@ test("zero domain-specific results produce an explicit no-domain-evidence summar
   assert.match(body.summary, /does not mean the website is safe/i);
 });
 
-test("upstream 503 responses map to a generic 502 response", async () => {
+test("upstream 503 is isolated as a TinyFish provider failure", async () => {
   setSearchFetch(async () =>
     jsonResponse({ error: "upstream maintenance" }, 503)
   );
 
   const { response, body } = await postInvestigation({ url: "https://example.com" });
 
-  assert.equal(response.status, 502);
-  assert.match(body.error, /unavailable/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").httpStatus, 503);
   assert.ok(!JSON.stringify(body).includes("upstream maintenance"));
   assert.ok(!capturedLogs.join("\n").includes(TEST_API_KEY));
+});
+
+test("Safe Browsing threat match remains authoritative when TinyFish fails", async () => {
+  setSearchFetch(async () => jsonResponse({ error: "private upstream detail" }, 503));
+  setSafeBrowsingFetch(async () => jsonResponse({ matches: [{
+    threatType: "MALWARE", platformType: "ANY_PLATFORM", threatEntryType: "URL",
+    threat: { url: "https://example.com/" }
+  }] }));
+
+  const { response, body } = await postInvestigation({ url: "https://example.com" });
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.verdict.status, "known_threat_detected");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").status, "unavailable");
+  assert.ok(!JSON.stringify(body).includes("private upstream detail"));
+});
+
+test("all provider failures return an inconclusive partial investigation", async () => {
+  setSearchFetch(async () => { throw new Error("private TinyFish failure"); });
+  setSafeBrowsingFetch(async () => { throw new Error("private Safe Browsing failure"); });
+
+  const { response, body } = await postInvestigation({ url: "https://example.com" });
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.verdict.status, "inconclusive");
+  assert.equal(body.providers.find((provider) => provider.id === "tinyfish_search").status, "unavailable");
+  assert.equal(body.threatAssessment.status, "unavailable");
+  assert.equal(body.safeAlternatives.status, "unavailable");
+  assert.ok(!JSON.stringify(body).includes("private"));
 });

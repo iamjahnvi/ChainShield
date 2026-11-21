@@ -19,11 +19,32 @@ const {
   analyzeContractSource
 } = require("../etherscan");
 const { buildVerdict } = require("../verdict");
+const { resolveSafeAlternatives } = require("../safe-alternatives");
+const domainImpersonationAnalyzer = require("../domain-impersonation");
 
 const router = express.Router();
 
 const NO_RESULTS_SUMMARY =
   "The web search returned no public sources for this website. This does not mean the website is safe.";
+
+function getDomainImpersonation(url) {
+  try {
+    const result = domainImpersonationAnalyzer.analyzeDomainImpersonation(url);
+    if (!result || typeof result !== "object" || typeof result.status !== "string" ||
+      !Array.isArray(result.matches) || typeof result.explanation !== "string") {
+      throw new TypeError("malformed domain impersonation result");
+    }
+    return result;
+  } catch (error) {
+    console.warn(`[investigations] domain impersonation check unavailable (errorName=${error?.name || "unknown"})`);
+    return {
+      status: "unavailable",
+      candidateDomain: url.hostname,
+      matches: [],
+      explanation: "Domain similarity could not be evaluated for this investigation."
+    };
+  }
+}
 
 function buildSummary(domain, evidence) {
   const domainCount = evidence.filter(
@@ -179,6 +200,9 @@ router.post("/", async (req, res) => {
 
   const domain = url.hostname;
   const urlSignals = { findings: analyzeUrl(url) };
+  // Impersonation similarity is contextual evidence only; verdict precedence
+  // remains owned by buildVerdict and is not changed by this module.
+  const domainImpersonation = getDomainImpersonation(url);
 
   try {
     const effectiveContractAddress = contractAddress !== undefined && contractAddress !== "" ? contractAddress : undefined;
@@ -216,14 +240,7 @@ router.post("/", async (req, res) => {
     const verdict = buildVerdict({ threatAssessment, urlSignals, providerStatuses });
     const providers = [tinyFishProvider, ...threatAssessment.providers];
 
-const alternativeSites = {};
-if (domain === "zzztd.com") {
-  alternativeSites.zzztd = {
-    label: "Best alternative website:",
-    link: "https://www.binance.com/en-IN",
-    text: "Binance"
-  };
-}
+    const safeAlternatives = resolveSafeAlternatives({ evidence, verdict });
 
 if (evidence.length === 0) {
       return res.json({
@@ -239,6 +256,8 @@ if (evidence.length === 0) {
         verdict,
         threatAssessment,
         urlSignals,
+        domainImpersonation,
+        safeAlternatives,
         ethereumAssessment,
         contractAnalysis: effectiveContractAddress ? contractAnalysis : undefined
       });
@@ -257,9 +276,10 @@ return res.json({
   verdict,
   threatAssessment,
   urlSignals,
+  domainImpersonation,
+  safeAlternatives,
   ethereumAssessment,
   contractAnalysis: effectiveContractAddress ? contractAnalysis : undefined,
-  alternativeSites
 });
   } catch (error) {
     console.error(

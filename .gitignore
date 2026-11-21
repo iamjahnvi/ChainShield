@@ -6,6 +6,9 @@
 # Node dependencies
 node_modules/
 
+# Generated production extension package
+/dist/
+
 # Local logs
 npm-debug.log*
 

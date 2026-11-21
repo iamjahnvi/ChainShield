@@ -1,4 +1,5 @@
-const API_URL = "http://localhost:3000/api/investigations";
+const API_BASE_URL = String(window.CHAINSHIELD_API_BASE_URL || "http://localhost:3000/api").replace(/\/$/, "");
+const API_URL = `${API_BASE_URL}/investigations`;
 const ONBOARDING_KEY = "chainShieldOnboardingComplete";
 const INVESTIGATION_TARGET_KEY = "chainShieldInvestigationTarget";
 
@@ -22,6 +23,14 @@ const newInvestigationButton = document.getElementById("new-investigation");
 const investigationContext = document.getElementById("investigation-context");
 const siteStatusBadge = document.getElementById("site-status-badge");
 const contractAddressInput = document.getElementById("contract-address");
+const historyList = document.getElementById("history-list");
+let currentRecord = null;
+window.addEventListener("chainshield:community-update", (event) => {
+  if (currentRecord && !currentRecord.demo) {
+    currentRecord.communitySummary = event.detail;
+    window.ChainShieldActionCenter.render(currentRecord.data, document, event.detail);
+  }
+});
 
 let currentStep = 1;
 let requestInProgress = false;
@@ -119,65 +128,7 @@ function safeHttpUrl(value) {
 }
 
 function renderWebsiteResults(data) {
-  const panel = document.getElementById("results-website");
-  const evidenceContainer = document.getElementById("results-website-evidence");
-  panel.hidden = false;
-  clear(evidenceContainer);
-  setResultStatus("results-website-status", data.summary || "Website search completed.");
-
-  if (!Array.isArray(data.evidence) || data.evidence.length === 0) {
-    evidenceContainer.append(
-      element(
-        "p",
-        "result-content",
-        "No public search evidence was returned. This does not establish that the website is safe."
-      )
-    );
-    return;
-  }
-
-  data.evidence.forEach((entry) => {
-    const item = element("article", "evidence-item");
-    item.append(element("div", "evidence-title", entry.title || "Untitled source"));
-    const linkUrl = safeHttpUrl(entry.url);
-    if (linkUrl) {
-      const link = element("a", "evidence-link", linkUrl);
-      link.href = linkUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      item.append(link);
-    } else if (entry.url) {
-      item.append(element("p", "evidence-meta", entry.url));
-    }
-    if (entry.snippet) {
-      item.append(element("p", "evidence-snippet", entry.snippet));
-    }
-    const categoryLabels = {
-      domain_specific: "Domain-specific",
-      general_information: "General information",
-      irrelevant_or_unclear: "Irrelevant or unclear"
-    };
-    const metadata = [];
-    if (entry.category) {
-      metadata.push(categoryLabels[entry.category] || entry.category);
-    }
-    if (entry.source) {
-      metadata.push(`Source: ${entry.source}`);
-    }
-    if (Number.isInteger(entry.position)) {
-      metadata.push(`Position: ${entry.position}`);
-    }
-    if (entry.siteName) {
-      metadata.push(`Site: ${entry.siteName}`);
-    }
-    if (metadata.length > 0) {
-      item.append(element("p", "evidence-meta", metadata.join(" · ")));
-    }
-    if (entry.categoryReason) {
-      item.append(element("p", "evidence-reason", entry.categoryReason));
-    }
-    evidenceContainer.append(item);
-  });
+  window.ChainShieldEvidenceView.render(data, document);
 }
 
 function renderThreatAssessment(assessment) {
@@ -462,7 +413,31 @@ function renderContractAnalysis(analysis) {
   });
 }
 
-function renderResults(data, submittedUrl) {
+function renderEvidenceExplorer(data) {
+  const panel = document.getElementById("results-explorer");
+  const container = document.getElementById("provider-explorer");
+  panel.hidden = false; clear(container);
+  const statusMap = new Map((Array.isArray(data.providers) ? data.providers : []).map((provider) => [provider.id, provider]));
+  const entries = [
+    { id: "url_heuristics", name: "URL heuristics", status: Array.isArray(data.urlSignals?.findings) ? (data.urlSignals.findings.length ? "suspicious indicator" : "no match found") : "inconclusive", detail: data.urlSignals?.findings?.map((finding) => finding.explanation || finding.title).filter(Boolean).join(" ") || "Configured local URL-structure checks." },
+    { id: "google_safe_browsing", name: "Google Safe Browsing", status: data.threatAssessment?.status || statusMap.get("google_safe_browsing")?.status || "unavailable", detail: data.threatAssessment?.status === "reported" ? "Provider returned a threat match." : data.threatAssessment?.status === "no_match" ? "No match for configured threat types; this does not verify safety." : "No completed reputation result is available." },
+    { id: "tinyfish_search", name: "TinyFish public web evidence", status: statusMap.get("tinyfish_search")?.status || "unavailable", detail: data.summary || "No search summary returned." },
+    { id: "domain_impersonation", name: "Domain impersonation", status: data.domainImpersonation?.status || "unavailable", detail: data.domainImpersonation?.explanation || "No similarity analysis returned." },
+    { id: "ethereum_rpc", name: "Ethereum RPC", status: data.ethereumAssessment?.status === "not_requested" ? "not applicable" : data.ethereumAssessment?.status || "unavailable", detail: data.ethereumAssessment?.reason || data.ethereumAssessment?.codeStatus || "Explicit contract address required." },
+    { id: "etherscan", name: "Etherscan source analysis", status: data.contractAnalysis?.status || "not applicable", detail: data.contractAnalysis?.message || data.contractAnalysis?.reason || "Not requested or no source result returned." }
+  ];
+  entries.forEach((entry) => {
+    const row = element("article", "provider-row");
+    row.append(element("div", "provider-row-heading", entry.name), element("span", "status-badge", entry.status));
+    row.append(element("p", "evidence-meta", entry.detail));
+    container.append(row);
+  });
+}
+
+function renderResults(data, submittedUrl, options = {}) {
+  document.getElementById("demo-banner").hidden = !options.demo;
+  document.getElementById("historical-banner").hidden = !options.historical;
+  document.getElementById("results-community").hidden = Boolean(options.demo);
   clear(investigationContext);
   const context = element("span");
   context.append(element("strong", "", "Website: "), document.createTextNode(submittedUrl));
@@ -471,12 +446,36 @@ function renderResults(data, submittedUrl) {
   renderThreatAssessment(data.threatAssessment);
   renderUrlSignals(data.urlSignals);
   renderSiteStatus(data.verdict, data.threatAssessment, data.urlSignals);
+  window.ChainShieldActionCenter.render(data);
+  renderDomainImpersonation(data);
+  renderEvidenceExplorer(data);
+  window.renderSafeAlternatives(data.safeAlternatives);
+  if (!options.demo) window.initializeCommunityIntelligence(data.domain, API_BASE_URL);
   renderEthereumAssessment(data.ethereumAssessment);
   if (data.contractAnalysis) {
     renderContractAnalysis(data.contractAnalysis);
     resultsWeb3.hidden = false;
   }
   results.hidden = false;
+  currentRecord = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, url: submittedUrl, timestamp: new Date().toISOString(), data, demo: Boolean(options.demo) };
+  if (!options.demo && !options.historical) {
+    try { window.ChainShieldHistory.save(currentRecord); renderHistory(); } catch { /* local history is optional */ }
+  }
+}
+
+function renderHistory() {
+  if (!historyList) return;
+  clear(historyList);
+  const records = window.ChainShieldHistory.read();
+  if (!records.length) { historyList.append(element("p", "history-note", "No local investigations saved yet.")); return; }
+  records.forEach((record) => {
+    const row = element("div", "history-item");
+    const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.value = record.id; checkbox.className = "history-select";
+    checkbox.setAttribute("aria-label", `Select ${record.data.verdict?.status || "unknown"} investigation from ${record.timestamp} for comparison`);
+    const copy = element("span", "", `${new Date(record.timestamp).toLocaleString()} · ${record.data.verdict?.status || "unknown"}${record.demo ? " · DEMO" : ""}`);
+    const open = element("button", "button button-quiet history-open", "Open snapshot"); open.type = "button"; open.addEventListener("click", () => { urlInput.value = record.url; renderResults(record.data, record.url, { historical: true, demo: record.demo }); });
+    row.append(checkbox, copy, open); historyList.append(row);
+  });
 }
 
 function validateSubmission(submittedUrl, contractAddress) {
@@ -599,8 +598,41 @@ skipButton.addEventListener("click", openWorkspace);
 investigationForm.addEventListener("submit", investigate);
 newInvestigationButton.addEventListener("click", () => {
   results.hidden = true;
+  currentRecord = null;
   setFormMessage("Enter another URL to start a new investigation.");
   urlInput.focus();
+});
+
+document.getElementById("export-json").addEventListener("click", () => {
+  if (currentRecord) window.ChainShieldReport.downloadJson(currentRecord);
+});
+document.getElementById("print-report").addEventListener("click", () => {
+  if (currentRecord && !window.ChainShieldReport.printReport(currentRecord)) {
+    setFormMessage("Allow pop-ups to open the print-friendly report.", "error");
+  }
+});
+document.getElementById("run-demo").addEventListener("click", () => {
+  const id = document.getElementById("demo-scenario").value;
+  const scenario = window.ChainShieldDemo.createScenario(id);
+  if (!scenario) { setFormMessage("Choose a demo scenario first.", "error"); return; }
+  urlInput.value = scenario.url;
+  contractAddressInput.value = scenario.ethereumAssessment.address || "";
+  resultsWeb3.hidden = true;
+  renderResults(scenario, scenario.url, { demo: true });
+  setFormMessage("DEMO / SIMULATED scenario loaded. No providers were contacted.", "success");
+});
+document.getElementById("clear-history").addEventListener("click", () => {
+  window.ChainShieldHistory.clear(); renderHistory();
+  document.getElementById("history-status").textContent = "Local scan history cleared.";
+});
+document.getElementById("compare-history").addEventListener("click", () => {
+  const ids = Array.from(document.querySelectorAll(".history-select:checked")).map((input) => input.value);
+  const records = window.ChainShieldHistory.read();
+  if (ids.length !== 2) { document.getElementById("history-status").textContent = "Select exactly two saved investigations to compare."; return; }
+  const changes = window.ChainShieldHistory.compare(...ids.map((id) => records.find((record) => record.id === id)));
+  document.getElementById("history-status").textContent = changes.length
+    ? changes.map((change) => `${change.field}: ${change.before} → ${change.after}`).join(" · ")
+    : "No changes in verdict, provider status, evidence, URL indicators, or domain similarity.";
 });
 
 document.querySelectorAll(".brand[href='#']").forEach((brandLink) => {
@@ -616,6 +648,8 @@ if (activeWebsite) {
     urlInput.value = rememberedTarget;
   }
 }
+
+renderHistory();
 
 if (localStorage.getItem(ONBOARDING_KEY) === "true") {
   onboardingView.hidden = true;

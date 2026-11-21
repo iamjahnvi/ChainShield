@@ -48,6 +48,16 @@ It combines:
 
 Each layer has a separate responsibility. A search result is not a threat verdict, bytecode presence is not a security guarantee, and verified source code is not proof that a contract is safe.
 
+### Investigation workflow and demo tools
+
+- **Domain impersonation:** the API compares the registrable domain with a small curated reference set and reports possible edit-distance or Unicode lookalike matches as review indicators. The catalogue is intentionally limited; no match does not rule out impersonation, and similarity never changes the verdict.
+- **Evidence explorer:** each provider and local check has an independent status, including unavailable, inconclusive, and not applicable states.
+- **Reports:** export a structured JSON snapshot or open a print-friendly report to save as PDF. Reports label demo data, sanitize URL credentials and common secret query parameters, escape untrusted text, and avoid embedding remote content.
+- **Local scan history:** up to ten recent snapshots are stored in extension-local browser storage. Users can reopen, compare, or clear them. Stored results are historical and require a fresh investigation for current signals.
+- **Demo mode:** five deterministic local scenarios (including a reserved `.invalid` phishing-style illustration) run without contacting providers. Every result is marked simulated and is excluded from saved history.
+
+The impersonation reference set currently includes Ethereum, MetaMask, OpenSea, Coinbase, and Uniswap. MetaMask's `metamask.com` entry is first-party verified as the primary domain; `metamask.io` is retained as a first-party verified redirect alias based on the redirect observed on 2026-11-20. Both entries retain their sources, provenance, and review date in the catalogue. Other legacy entries retain their existing references and were not re-reviewed in this change. Domain recognition does not guarantee page, download, or linked-service safety.
+
 ## ✨ Core capabilities
 
 The extension, onboarding flow, investigation workspace, report, favicon, and toolbar icons share the red shield-and-checkmark identity. Reports keep provider failures, no-match results, and local heuristic indicators distinct; a no-match is not shown as domain verification.
@@ -351,6 +361,7 @@ npm install
 Create the local environment file using the provided template:
 
 ```powershell
+Set-Location server
 Copy-Item .env.example .env
 ```
 
@@ -364,6 +375,11 @@ GOOGLE_SAFE_BROWSING_API_KEY=your_google_safe_browsing_api_key
 
 ETH_RPC_URL=https://your-ethereum-rpc-endpoint
 ETHERSCAN_API_KEY=your_etherscan_api_key
+
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SECRET_KEY=your_server_only_supabase_secret_key
+COMMUNITY_ADMIN_TOKEN=at_least_32_random_characters
+COMMUNITY_HASH_SECRET=at_least_32_random_characters
 ```
 
 Use actual provider credentials locally. The values above are placeholders, not working keys.
@@ -375,6 +391,7 @@ Use actual provider credentials locally. The values above are placeholders, not 
 - `PORT` optionally overrides the backend port.
 
 `ETH_RPC_TIMEOUT_MS` can optionally be configured to control the Ethereum RPC timeout where supported by the implementation.
+`ETHERSCAN_TIMEOUT_MS` optionally controls each Etherscan request timeout (default 6000 ms).
 
 Never commit `server/.env`, place provider keys in extension code, or share credentials in screenshots, logs, or public issues.
 
@@ -386,7 +403,7 @@ From the `server` directory:
 npm test
 ```
 
-The latest project audit reported **127 passing tests and zero failures**. Run the suite against your current checkout to verify its present state.
+The latest project run passed **187 tests: 170 backend and 17 extension tests, with zero failures**. The backend test command runs Node's test runner in single-process mode for Windows environments that restrict worker process creation. Run extension tests from the repository root with `node --test --test-isolation=none --test-concurrency=1 extension/*.test.js`.
 
 Automated tests use controlled provider responses where applicable; passing tests alone do not prove that live provider credentials or external services are working.
 
@@ -465,13 +482,32 @@ Checks whether the backend is responding.
 
 A successful health check does not guarantee that TinyFish, Google Safe Browsing, Ethereum RPC, or Etherscan is reachable.
 
+### Community Intelligence
+
+Community reports use Supabase Postgres because a Vercel function does not provide shared durable local storage. The backend integration is implemented through PostgREST RPC. It expects `public.community_reports` and `public.community_rate_limits`, and the functions `community_submit_report`, `community_public_summary`, `community_moderation_queue`, and `community_moderate_report`, as defined by [`server/migrations/001_community_reports.sql`](server/migrations/001_community_reports.sql). The migration enables row-level security, denies direct browser-role table access, and grants the backend service role access through RPC. Keep `SUPABASE_SECRET_KEY`, `COMMUNITY_ADMIN_TOKEN`, and `COMMUNITY_HASH_SECRET` in the backend environment; never place them in extension code. Review the current Supabase plan and inactivity terms before production use.
+
+**Integration status (2026-11-20):** source support is implemented, and the audited local workspace has non-empty Supabase/community configuration in `server/.env`. This establishes local configuration only. A Preview API URL was not available to this audit, so remote Supabase connectivity and Vercel Preview deployment are **not currently verified here**. Historical reports of successful live integration are not represented as a fresh verification. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the read-only Preview checks and the deployment status distinctions.
+
+Reports are normalized to the registrable domain using the Public Suffix List through `tldts`. New submissions are pending and hidden from public queries until approved. Five submissions per hashed network identifier per hour are accepted; duplicate domain/category/description reports are rejected. The raw client address is not stored in the report rows; a keyed HMAC is kept temporarily for rate limiting.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/community/domains/:domain` | Approved total, category counts, and up to 10 recent approved reports |
+| `POST /api/community/reports` | Submit `{ domain, category, description, evidenceUrl? }`; returns `202` while pending |
+| `GET /api/community/admin/reports` | Protected pending moderation queue |
+| `POST /api/community/admin/reports/:id/moderation` | Protected `{ action: "approve" | "reject" | "remove" }` action |
+
+Admin routes require `Authorization: Bearer <COMMUNITY_ADMIN_TOKEN>`. Set `TRUST_PROXY_HOPS=1` on Vercel or to the number of trusted reverse proxies in your hosting environment so IP-based limits use the client address as intended. Reports are unverified user submissions even after moderation; they are displayed separately and do not feed or override the security verdict. When Supabase is not configured or unavailable, community endpoints report an error while the investigation endpoints continue independently.
+
+The extension defaults to `http://localhost:3000/api`. For a remote extension build, run `node scripts/build-extension.js https://<your-backend-domain>/api`; it creates `dist/extension` with the API base and exact remote host permission while preserving the local source configuration. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for deployment, Supabase setup, and end-to-end checks.
+
 ---
 
 ## 🧪 Testing and verification
 
 ChainShield's automated tests are designed to validate behavior at the boundaries between the extension, backend, and external services.
 
-The latest reported audit covered 127 tests across six test files.
+The latest validation covered 187 tests: 170 backend and 17 extension tests.
 
 Important test areas include:
 
@@ -485,6 +521,9 @@ Important test areas include:
 - Incomplete and unavailable analysis states
 - Provider failure isolation
 - Safe rendering of investigation results
+- Domain similarity normalization and Unicode lookalike detection
+- Local history limits and malformed storage handling
+- Report escaping, URL sanitization, and demo/live separation
 
 For a release check, run `npm test`, review `git diff --check`, and manually verify both website-only and contract-address investigations with valid provider configuration.
 

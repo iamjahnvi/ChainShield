@@ -23,6 +23,26 @@ test("health endpoint reports that the backend is running", async () => {
   assert.deepEqual(await response.json(), { status: "ok" });
 });
 
+test("CORS permits Chrome extension API preflights and rejects ordinary website origins", async (t) => {
+  await t.test("extension origin", async () => {
+    const response = await fetch(`${baseUrl}/api/investigations`, {
+      method: "OPTIONS",
+      headers: { Origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop", "Access-Control-Request-Method": "POST" }
+    });
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get("access-control-allow-origin"), "chrome-extension://abcdefghijklmnopabcdefghijklmnop");
+    assert.match(response.headers.get("access-control-allow-methods"), /POST/);
+  });
+  await t.test("website origin", async () => {
+    const response = await fetch(`${baseUrl}/api/investigations`, {
+      method: "OPTIONS",
+      headers: { Origin: "https://attacker.example", "Access-Control-Request-Method": "POST" }
+    });
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.get("access-control-allow-origin"), null);
+  });
+});
+
 test("investigation endpoint rejects missing and malformed URLs", async (t) => {
   const cases = [
     { name: "missing URL", body: {}, error: "A URL is required." },
